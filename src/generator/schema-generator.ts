@@ -57,7 +57,7 @@ function getPrimitiveSchema(type: Function): OpenAPIV3.SchemaObject {
 /**
  * Convert property metadata to OpenAPI schema property
  */
-function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.SchemaObject {
+function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject {
   const schema: OpenAPIV3.SchemaObject = {};
 
   // Handle array type
@@ -71,7 +71,7 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
       // It's a DTO, generate reference
       schema.items = {
         $ref: `#/components/schemas/${metadata.type.name}`,
-      };
+      } as OpenAPIV3.ReferenceObject;
     }
   } else if (metadata.type) {
     // Non-array type
@@ -82,7 +82,7 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
       // It's a DTO, generate reference
       return {
         $ref: `#/components/schemas/${metadata.type.name}`,
-      };
+      } as OpenAPIV3.ReferenceObject;
     }
   }
 
@@ -135,12 +135,7 @@ function isPrimitiveType(type: Function): boolean {
   );
 }
 
-/**
- * Check if a type is a Date constructor
- */
-function isDateType(type: Function): boolean {
-  return type === Date;
-}
+
 
 /**
  * Generate OpenAPI schema for a DTO class
@@ -156,7 +151,7 @@ export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject
 
   const schema: OpenAPIV3.SchemaObject = {
     type: 'object',
-    properties: {},
+    properties: {} as Record<string, OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject>,
     required: [],
   };
 
@@ -258,7 +253,7 @@ export function generateSchemas(): Record<string, OpenAPIV3.SchemaObject> {
  * Generate schema property for OpenAPI 3.1.0
  * Main difference: uses type array for nullable instead of nullable: true
  */
-function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjectV31 {
+function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjectV31 | OpenAPIV3_1.ReferenceObject {
   const schema: SchemaObjectV31 = {};
 
   // Handle array type
@@ -272,7 +267,7 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
       // It's a DTO, generate reference
       schema.items = {
         $ref: `#/components/schemas/${metadata.type.name}`,
-      };
+      } as OpenAPIV3_1.ReferenceObject;
     }
   } else if (metadata.type) {
     // Non-array type
@@ -283,7 +278,7 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
       // It's a DTO, generate reference
       return {
         $ref: `#/components/schemas/${metadata.type.name}`,
-      };
+      } as OpenAPIV3_1.ReferenceObject;
     }
   }
 
@@ -343,7 +338,7 @@ function getPrimitiveSchemaV31(type: Function): SchemaObjectV31 {
 export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
   // Check cache first
   if (schemaCache.has(dtoClass)) {
-    return schemaCache.get(dtoClass) as SchemaObjectV31;
+    return schemaCache.get(dtoClass) as unknown as SchemaObjectV31;
   }
 
   // Get all properties for this DTO
@@ -351,7 +346,7 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
 
   const schema: SchemaObjectV31 = {
     type: 'object',
-    properties: {},
+    properties: {} as Record<string, SchemaObjectV31 | OpenAPIV3_1.ReferenceObject>,
     required: [],
   };
 
@@ -368,7 +363,7 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
   }
 
   // Cache the schema
-  schemaCache.set(dtoClass, schema as SchemaObjectV30);
+  schemaCache.set(dtoClass, schema as unknown as SchemaObjectV30);
 
   return schema;
 }

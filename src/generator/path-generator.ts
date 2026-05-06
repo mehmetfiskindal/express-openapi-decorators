@@ -1,18 +1,13 @@
 import type { OpenAPIV3, OpenAPIV3_1 } from '../types/openapi.types.js';
 import { metadataStorage } from '../metadata/metadata-storage.js';
 import type { MethodMetadata, HttpMethod } from '../metadata/metadata-types.js';
-import { collectDtoClasses, generateSchemaForDto, generateSchemaForDtoV31 } from './schema-generator.js';
+
 
 // Type aliases for both versions
-type ParameterObjectV30 = OpenAPIV3.ParameterObject;
 type ParameterObjectV31 = OpenAPIV3_1.ParameterObject;
-type RequestBodyObjectV30 = OpenAPIV3.RequestBodyObject;
 type RequestBodyObjectV31 = OpenAPIV3_1.RequestBodyObject;
-type ResponseObjectV30 = OpenAPIV3.ResponseObject;
 type ResponseObjectV31 = OpenAPIV3_1.ResponseObject;
-type OperationObjectV30 = OpenAPIV3.OperationObject;
 type OperationObjectV31 = OpenAPIV3_1.OperationObject;
-type PathsObjectV30 = OpenAPIV3.PathsObject;
 type PathsObjectV31 = OpenAPIV3_1.PathsObject;
 
 /**
@@ -61,7 +56,7 @@ function convertExpressParamsToOpenApi(path: string): string {
 /**
  * Get primitive type for OpenAPI parameter schema
  */
-function getPrimitiveTypeName(type: Function): string {
+function getPrimitiveTypeName(type: Function): 'string' | 'number' | 'boolean' {
   if (type === String) return 'string';
   if (type === Number) return 'number';
   if (type === Boolean) return 'boolean';
@@ -155,11 +150,16 @@ function generateFileUploadSchema(fileParams: import('../metadata/metadata-types
     }
   }
 
-  return {
+  const schema: OpenAPIV3.SchemaObject = {
     type: 'object',
     properties,
-    required: required.length > 0 ? required : undefined,
   };
+
+  if (required.length > 0) {
+    schema.required = required;
+  }
+
+  return schema;
 }
 
 /**
@@ -202,7 +202,6 @@ function generateRequestBody(target: Function, methodName: string): OpenAPIV3.Re
   const contentType = consumes?.contentTypes[0] ?? 'application/json';
 
   const requestBody: OpenAPIV3.RequestBodyObject = {
-    description: bodyParam.description,
     required: bodyParam.required ?? true,
     content: {
       [contentType]: {
@@ -212,6 +211,10 @@ function generateRequestBody(target: Function, methodName: string): OpenAPIV3.Re
       },
     },
   };
+
+  if (bodyParam.description) {
+    requestBody.description = bodyParam.description;
+  }
 
   return requestBody;
 }
@@ -329,7 +332,7 @@ function generateOperation(
   controller: Function,
   method: MethodMetadata
 ): OpenAPIV3.OperationObject {
-  const operation: OpenAPIV3.OperationObject = {
+  const operation: Partial<OpenAPIV3.OperationObject> = {
     operationId: `${controller.name}_${method.methodName}`,
   };
 
@@ -393,7 +396,7 @@ function generateOperation(
     operation.security = security;
   }
 
-  return operation;
+  return operation as OpenAPIV3.OperationObject;
 }
 
 /**
@@ -492,11 +495,11 @@ function generateFileUploadSchemaV31(fileParams: import('../metadata/metadata-ty
   const required: string[] = [];
 
   for (const fileParam of fileParams) {
-    const fileSchema: OpenAPIV3_1.SchemaObject = {
+    const fileSchema = {
       type: 'string',
       contentEncoding: 'base64',
       contentMediaType: fileParam.allowedMimeTypes?.[0] ?? 'application/octet-stream',
-    };
+    } as OpenAPIV3_1.SchemaObject;
 
     if (fileParam.description) {
       fileSchema.description = fileParam.description;
@@ -516,11 +519,16 @@ function generateFileUploadSchemaV31(fileParams: import('../metadata/metadata-ty
     }
   }
 
-  return {
+  const schema: OpenAPIV3_1.SchemaObject = {
     type: 'object',
     properties,
-    required: required.length > 0 ? required : undefined,
   };
+
+  if (required.length > 0) {
+    schema.required = required;
+  }
+
+  return schema;
 }
 
 /**
@@ -563,7 +571,6 @@ function generateRequestBodyV31(target: Function, methodName: string): RequestBo
   const contentType = consumes?.contentTypes[0] ?? 'application/json';
 
   const requestBody: RequestBodyObjectV31 = {
-    description: bodyParam.description,
     required: bodyParam.required ?? true,
     content: {
       [contentType]: {
@@ -573,6 +580,10 @@ function generateRequestBodyV31(target: Function, methodName: string): RequestBo
       },
     },
   };
+
+  if (bodyParam.description) {
+    requestBody.description = bodyParam.description;
+  }
 
   return requestBody;
 }
@@ -672,7 +683,7 @@ function generateOperationV31(
   controller: Function,
   method: MethodMetadata
 ): OperationObjectV31 {
-  const operation: OperationObjectV31 = {
+  const operation: Partial<OperationObjectV31> = {
     operationId: `${controller.name}_${method.methodName}`,
   };
 
@@ -736,7 +747,7 @@ function generateOperationV31(
     operation.security = security;
   }
 
-  return operation;
+  return operation as OperationObjectV31;
 }
 
 /**

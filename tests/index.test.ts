@@ -258,7 +258,7 @@ describe('OpenAPI Document Generator', () => {
       controllers: [TestController],
     });
 
-    expect(document.openapi).toBe('3.0.3');
+    expect(document.openapi).toBe('3.1.0');
     expect(document.info.title).toBe('Test API');
     expect(document.info.version).toBe('1.0.0');
     expect(document.paths['/test']).toBeDefined();
