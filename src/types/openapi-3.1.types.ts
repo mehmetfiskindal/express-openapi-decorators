@@ -1,26 +1,25 @@
 /**
- * Minimal OpenAPI 3.0 types
- * Based on OpenAPI Specification 3.0.3
+ * OpenAPI 3.1.0 type definitions
+ * Based on OpenAPI Specification 3.1.0
  */
 
-import type { OpenAPIV3_1, OpenApiVersion } from './openapi-3.1.types.js';
-
-export { OpenAPIV3_1, OpenApiVersion };
-
-export namespace OpenAPIV3 {
-  export interface Document {
-    openapi: string;
+export namespace OpenAPIV3_1 {
+  export type Document = {
+    openapi: '3.1.0';
     info: InfoObject;
+    jsonSchemaDialect?: string;
     servers?: ServerObject[];
-    paths: PathsObject;
+    paths?: PathsObject;
+    webhooks?: Record<string, PathItemObject | ReferenceObject>;
     components?: ComponentsObject;
     security?: SecurityRequirementObject[];
     tags?: TagObject[];
     externalDocs?: ExternalDocumentationObject;
-  }
+  };
 
   export interface InfoObject {
     title: string;
+    summary?: string;
     description?: string;
     termsOfService?: string;
     contact?: ContactObject;
@@ -36,6 +35,7 @@ export namespace OpenAPIV3 {
 
   export interface LicenseObject {
     name: string;
+    identifier?: string;
     url?: string;
   }
 
@@ -46,8 +46,8 @@ export namespace OpenAPIV3 {
   }
 
   export interface ServerVariableObject {
-    enum?: string[] | number[];
-    default: string | number;
+    enum?: string[];
+    default: string;
     description?: string;
   }
 
@@ -79,7 +79,7 @@ export namespace OpenAPIV3 {
     operationId?: string;
     parameters?: (ParameterObject | ReferenceObject)[];
     requestBody?: RequestBodyObject | ReferenceObject;
-    responses: ResponsesObject;
+    responses?: ResponsesObject;
     callbacks?: Record<string, CallbackObject | ReferenceObject>;
     deprecated?: boolean;
     security?: SecurityRequirementObject[];
@@ -93,7 +93,7 @@ export namespace OpenAPIV3 {
 
   export interface ParameterObject {
     name: string;
-    in: 'query' | 'header' | 'path' | 'formData' | 'cookie';
+    in: 'query' | 'header' | 'path' | 'cookie';
     description?: string;
     required?: boolean;
     deprecated?: boolean;
@@ -108,46 +108,76 @@ export namespace OpenAPIV3 {
   }
 
   export interface SchemaObject {
-    nullable?: boolean;
-    discriminator?: DiscriminatorObject;
-    readOnly?: boolean;
-    writeOnly?: boolean;
-    xml?: XMLObject;
-    externalDocs?: ExternalDocumentationObject;
-    example?: unknown;
-    deprecated?: boolean;
-    type?: 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'string';
-    format?: string;
-    allOf?: (SchemaObject | ReferenceObject)[];
-    oneOf?: (SchemaObject | ReferenceObject)[];
-    anyOf?: (SchemaObject | ReferenceObject)[];
-    not?: SchemaObject | ReferenceObject;
-    items?: SchemaObject | ReferenceObject;
-    properties?: Record<string, SchemaObject | ReferenceObject>;
-    additionalProperties?: boolean | SchemaObject | ReferenceObject;
-    description?: string;
-    default?: unknown;
-    title?: string;
+    // JSON Schema Core
+    $id?: string;
+    $schema?: string;
+    $ref?: string;
+    $anchor?: string;
+    $dynamicRef?: string;
+    $dynamicAnchor?: string;
+    $vocabulary?: Record<string, boolean>;
+    $comment?: string;
+    $defs?: Record<string, SchemaObject>;
+
+    // JSON Schema Validation
+    type?: 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'string' | ('array' | 'boolean' | 'integer' | 'number' | 'object' | 'string' | 'null')[];
+    const?: unknown;
+    enum?: unknown[];
     multipleOf?: number;
     maximum?: number;
-    exclusiveMaximum?: boolean;
+    exclusiveMaximum?: number;
     minimum?: number;
-    exclusiveMinimum?: boolean;
+    exclusiveMinimum?: number;
     maxLength?: number;
     minLength?: number;
     pattern?: string;
     maxItems?: number;
     minItems?: number;
     uniqueItems?: boolean;
+    maxContains?: number;
+    minContains?: number;
     maxProperties?: number;
     minProperties?: number;
     required?: string[];
-    enum?: unknown[];
-    const?: unknown;
+    dependentRequired?: Record<string, string[]>;
+
+    // JSON Schema Applicator
+    prefixItems?: (SchemaObject | ReferenceObject)[];
+    items?: SchemaObject | ReferenceObject;
+    contains?: SchemaObject | ReferenceObject;
+    properties?: Record<string, SchemaObject | ReferenceObject>;
+    patternProperties?: Record<string, SchemaObject | ReferenceObject>;
+    additionalProperties?: boolean | SchemaObject | ReferenceObject;
+    propertyNames?: SchemaObject | ReferenceObject;
+    allOf?: (SchemaObject | ReferenceObject)[];
+    anyOf?: (SchemaObject | ReferenceObject)[];
+    oneOf?: (SchemaObject | ReferenceObject)[];
+    not?: SchemaObject | ReferenceObject;
+    if?: SchemaObject | ReferenceObject;
+    then?: SchemaObject | ReferenceObject;
+    else?: SchemaObject | ReferenceObject;
+    dependentSchemas?: Record<string, SchemaObject | ReferenceObject>;
+
+    // JSON Schema Metadata
+    title?: string;
+    description?: string;
+    default?: unknown;
+    deprecated?: boolean;
+    readOnly?: boolean;
+    writeOnly?: boolean;
+    examples?: unknown[];
+    format?: string;
+
+    // OpenAPI 3.1.0 specific
+    discriminator?: DiscriminatorObject;
+    xml?: XMLObject;
+    externalDocs?: ExternalDocumentationObject;
   }
 
   export interface ReferenceObject {
     $ref: string;
+    summary?: string;
+    description?: string;
   }
 
   export interface DiscriminatorObject {
@@ -234,6 +264,7 @@ export namespace OpenAPIV3 {
     securitySchemes?: Record<string, SecuritySchemeObject | ReferenceObject>;
     links?: Record<string, LinkObject | ReferenceObject>;
     callbacks?: Record<string, CallbackObject | ReferenceObject>;
+    pathItems?: Record<string, PathItemObject | ReferenceObject>;
   }
 
   export type SecuritySchemeObject =
@@ -297,3 +328,9 @@ export namespace OpenAPIV3 {
     externalDocs?: ExternalDocumentationObject;
   }
 }
+
+// Union type for both OpenAPI versions
+export type OpenApiVersion = '3.0.3' | '3.1.0';
+
+// Document union type
+export type OpenApiDocument = OpenAPIV3_1.Document;

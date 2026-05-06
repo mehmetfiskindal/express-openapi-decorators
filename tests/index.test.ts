@@ -1,6 +1,14 @@
 import 'reflect-metadata';
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
+import * as mod from '../src/index.js';
+
+// Debug imports
+console.log('Module keys:', Object.keys(mod));
+console.log('ApiBearerAuth type:', typeof mod.ApiBearerAuth);
+console.log('ApiFile type:', typeof mod.ApiFile);
+console.log('ExpressAdapter type:', typeof mod.ExpressAdapter);
+
+const {
   Controller,
   Get,
   Post,
@@ -16,7 +24,21 @@ import {
   ApiPropertyOptional,
   createOpenApiDocument,
   metadataStorage,
-} from '../src/index.js';
+  // New features
+  ApiBearerAuth,
+  ApiBasicAuth,
+  ApiApiKey,
+  ApiOAuth2,
+  ApiOpenIdConnect,
+  ApiSecurity,
+  Public,
+  ApiFile,
+  ApiFiles,
+  ApiConsumes,
+  ApiFormData,
+  Use,
+  ExpressAdapter,
+} = mod;
 
 describe('Metadata Storage', () => {
   beforeEach(() => {
@@ -325,5 +347,318 @@ describe('OpenAPI Document Generator', () => {
     expect(pageParam?.in).toBe('query');
     expect(limitParam).toBeDefined();
     expect(limitParam?.in).toBe('query');
+  });
+});
+
+describe('OpenAPI 3.1.0 Support', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  it('should generate OpenAPI 3.1.0 document by default', () => {
+    @Controller('/test')
+    class TestController {
+      @Get('/')
+      getAll() {}
+    }
+
+    const document = createOpenApiDocument({
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [TestController],
+    });
+
+    expect(document.openapi).toBe('3.1.0');
+  });
+
+  it('should support explicit 3.1.0 version', () => {
+    @Controller('/test')
+    class TestController {
+      @Get('/')
+      getAll() {}
+    }
+
+    const document = createOpenApiDocument({
+      openapi: '3.1.0',
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [TestController],
+    });
+
+    expect(document.openapi).toBe('3.1.0');
+  });
+
+  it('should support 3.0.3 version', () => {
+    @Controller('/test')
+    class TestController {
+      @Get('/')
+      getAll() {}
+    }
+
+    const document = createOpenApiDocument({
+      openapi: '3.0.3',
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [TestController],
+    });
+
+    expect(document.openapi).toBe('3.0.3');
+  });
+});
+
+describe('Authentication Decorators', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  describe('ApiBearerAuth', () => {
+    it('should register bearer auth scheme and requirement', () => {
+      @ApiBearerAuth()
+      @Controller('/protected')
+      class ProtectedController {
+        @Get('/')
+        getAll() {}
+      }
+
+      const schemes = metadataStorage.getSecuritySchemes();
+      expect(schemes).toHaveLength(1);
+      expect(schemes[0]?.name).toBe('bearer');
+      expect(schemes[0]?.type).toBe('http');
+      expect(schemes[0]?.scheme).toBe('bearer');
+      expect(schemes[0]?.bearerFormat).toBe('JWT');
+
+      const requirements = metadataStorage.getSecurityForController(ProtectedController);
+      expect(requirements).toHaveLength(1);
+      expect(requirements[0]?.schemes).toContain('bearer');
+    });
+
+    it('should support custom name and options', () => {
+      @ApiBearerAuth('jwt', { bearerFormat: 'JWT', description: 'JWT token' })
+      @Controller('/api')
+      class ApiController {}
+
+      const schemes = metadataStorage.getSecuritySchemes();
+      expect(schemes[0]?.name).toBe('jwt');
+      expect(schemes[0]?.bearerFormat).toBe('JWT');
+      expect(schemes[0]?.description).toBe('JWT token');
+    });
+  });
+
+  describe('ApiBasicAuth', () => {
+    it('should register basic auth scheme', () => {
+      @ApiBasicAuth()
+      @Controller('/admin')
+      class AdminController {}
+
+      const schemes = metadataStorage.getSecuritySchemes();
+      expect(schemes).toHaveLength(1);
+      expect(schemes[0]?.type).toBe('http');
+      expect(schemes[0]?.scheme).toBe('basic');
+    });
+  });
+
+  describe('ApiApiKey', () => {
+    it('should register API key scheme', () => {
+      @ApiApiKey('apiKey', { name: 'X-API-Key', in: 'header' })
+      @Controller('/api')
+      class ApiController {}
+
+      const schemes = metadataStorage.getSecuritySchemes();
+      expect(schemes).toHaveLength(1);
+      expect(schemes[0]?.type).toBe('apiKey');
+      expect(schemes[0]?.in).toBe('header');
+    });
+  });
+
+  describe('Public decorator', () => {
+    it('should mark route as public (no security)', () => {
+      @ApiBearerAuth()
+      @Controller('/mixed')
+      class MixedController {
+        @Public()
+        @Get('/public')
+        publicRoute() {}
+
+        @Get('/private')
+        privateRoute() {}
+      }
+
+      const publicSecurity = metadataStorage.getSecurityForMethod(MixedController, 'publicRoute');
+      expect(publicSecurity).toHaveLength(1);
+      expect(publicSecurity[0]?.schemes).toHaveLength(0);
+    });
+  });
+
+  describe('OpenAPI Document Security', () => {
+    it('should include security schemes in document', () => {
+      @ApiBearerAuth()
+      @Controller('/api')
+      class ApiController {}
+
+      const document = createOpenApiDocument({
+        title: 'Test API',
+        version: '1.0.0',
+        controllers: [ApiController],
+      });
+
+      expect(document.components?.securitySchemes).toBeDefined();
+      expect(document.components?.securitySchemes?.bearer).toBeDefined();
+    });
+
+    it('should include security requirements in operations', () => {
+      @ApiBearerAuth()
+      @Controller('/api')
+      class ApiController {
+        @Get('/')
+        getAll() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test API',
+        version: '1.0.0',
+        controllers: [ApiController],
+      });
+
+      const operation = document.paths['/api']?.get;
+      expect(operation?.security).toBeDefined();
+      expect(operation?.security?.[0]).toHaveProperty('bearer');
+    });
+  });
+});
+
+describe('File Upload Decorators', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  describe('ApiFile', () => {
+    it('should register single file upload metadata', () => {
+      @Controller('/upload')
+      class UploadController {
+        @ApiFile({ name: 'avatar', required: true })
+        @Post('/avatar')
+        uploadAvatar() {}
+      }
+
+      const fileParams = metadataStorage.getFileParamsForMethod(UploadController, 'uploadAvatar');
+      expect(fileParams).toHaveLength(1);
+      expect(fileParams[0]?.name).toBe('avatar');
+      expect(fileParams[0]?.isArray).toBe(false);
+      expect(fileParams[0]?.required).toBe(true);
+    });
+  });
+
+  describe('ApiFiles', () => {
+    it('should register multiple files upload metadata', () => {
+      @Controller('/upload')
+      class UploadController {
+        @ApiFiles({ name: 'documents' })
+        @Post('/documents')
+        uploadDocuments() {}
+      }
+
+      const fileParams = metadataStorage.getFileParamsForMethod(UploadController, 'uploadDocuments');
+      expect(fileParams).toHaveLength(1);
+      expect(fileParams[0]?.name).toBe('documents');
+      expect(fileParams[0]?.isArray).toBe(true);
+    });
+  });
+
+  describe('ApiConsumes', () => {
+    it('should register content types', () => {
+      @Controller('/api')
+      class ApiController {
+        @ApiConsumes('application/xml')
+        @Post('/xml')
+        processXml() {}
+      }
+
+      const consumes = metadataStorage.getConsumesForMethod(ApiController, 'processXml');
+      expect(consumes).toBeDefined();
+      expect(consumes?.contentTypes).toContain('application/xml');
+    });
+  });
+
+  describe('Multipart Form Data in OpenAPI', () => {
+    it('should generate multipart/form-data request body', () => {
+      @Controller('/upload')
+      class UploadController {
+        @ApiFile({ name: 'file' })
+        @Post('/')
+        upload() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test API',
+        version: '1.0.0',
+        controllers: [UploadController],
+      });
+
+      const operation = document.paths['/upload']?.post;
+      expect(operation?.requestBody).toBeDefined();
+      
+      const content = (operation?.requestBody as Record<string, unknown>)?.content as Record<string, unknown>;
+      expect(content?.['multipart/form-data']).toBeDefined();
+    });
+  });
+});
+
+describe('Middleware Decorator', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  it('should register controller-level middleware', () => {
+    const testMiddleware = (req: any, res: any, next: any) => next();
+
+    @Use(testMiddleware)
+    @Controller('/api')
+    class ApiController {}
+
+    const middlewares = metadataStorage.getMiddlewaresForController(ApiController);
+    expect(middlewares).toHaveLength(1);
+    expect(middlewares[0]).toBe(testMiddleware);
+  });
+
+  it('should register method-level middleware', () => {
+    const authMiddleware = (req: any, res: any, next: any) => next();
+
+    @Controller('/api')
+    class ApiController {
+      @Use(authMiddleware)
+      @Get('/protected')
+      protectedRoute() {}
+    }
+
+    const middlewares = metadataStorage.getMiddlewaresForMethod(ApiController, 'protectedRoute');
+    expect(middlewares).toHaveLength(1);
+    expect(middlewares[0]).toBe(authMiddleware);
+  });
+});
+
+describe('ExpressAdapter', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  it('should create an adapter instance', () => {
+    const mockApp = { use: () => {} };
+    const adapter = new ExpressAdapter(mockApp as any);
+    expect(adapter).toBeDefined();
+    expect(adapter.getRouter()).toBeDefined();
+  });
+
+  it('should store controller metadata', () => {
+    @Controller('/test')
+    class TestController {
+      @Get('/')
+      getAll() {
+        return 'success';
+      }
+    }
+
+    const controller = metadataStorage.findController(TestController);
+    expect(controller).toBeDefined();
+    expect(controller?.basePath).toBe('/test');
   });
 });

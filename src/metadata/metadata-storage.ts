@@ -9,6 +9,12 @@ import type {
   ApiParamMetadata,
   ApiPropertyMetadata,
   ApiTagsMetadata,
+  SecuritySchemeMetadata,
+  ApiSecurityMetadata,
+  ApiFileMetadata,
+  ApiConsumesMetadata,
+  MiddlewareMetadata,
+  MiddlewareFunction,
 } from './metadata-types.js';
 
 /**
@@ -25,6 +31,11 @@ class MetadataStorageImpl {
   readonly pathParams: ApiParamMetadata[] = [];
   readonly properties: ApiPropertyMetadata[] = [];
   readonly tags: ApiTagsMetadata[] = [];
+  readonly securitySchemes: SecuritySchemeMetadata[] = [];
+  readonly securityRequirements: ApiSecurityMetadata[] = [];
+  readonly fileParams: ApiFileMetadata[] = [];
+  readonly consumes: ApiConsumesMetadata[] = [];
+  readonly middlewares: MiddlewareMetadata[] = [];
 
   /**
    * Add controller metadata
@@ -87,6 +98,110 @@ class MetadataStorageImpl {
    */
   addTags(metadata: ApiTagsMetadata): void {
     this.tags.push(metadata);
+  }
+
+  /**
+   * Add security scheme metadata
+   */
+  addSecurityScheme(metadata: SecuritySchemeMetadata): void {
+    // Check if scheme already exists
+    const existingIndex = this.securitySchemes.findIndex(s => s.name === metadata.name);
+    if (existingIndex >= 0) {
+      this.securitySchemes[existingIndex] = metadata;
+    } else {
+      this.securitySchemes.push(metadata);
+    }
+  }
+
+  /**
+   * Add security requirement metadata
+   */
+  addSecurityRequirement(metadata: ApiSecurityMetadata): void {
+    this.securityRequirements.push(metadata);
+  }
+
+  /**
+   * Get all security schemes
+   */
+  getSecuritySchemes(): SecuritySchemeMetadata[] {
+    return this.securitySchemes;
+  }
+
+  /**
+   * Get security requirements for a specific method
+   */
+  getSecurityForMethod(target: Function, methodName: string): ApiSecurityMetadata[] {
+    return this.securityRequirements.filter(
+      (s) => s.target === target && s.methodName === methodName
+    );
+  }
+
+  /**
+   * Get security requirements for a controller (controller-level)
+   */
+  getSecurityForController(controller: Function): ApiSecurityMetadata[] {
+    return this.securityRequirements.filter(
+      (s) => s.target === controller && s.methodName === undefined
+    );
+  }
+
+  /**
+   * Add file parameter metadata
+   */
+  addFileParam(metadata: ApiFileMetadata): void {
+    this.fileParams.push(metadata);
+  }
+
+  /**
+   * Get file parameters for a specific method
+   */
+  getFileParamsForMethod(target: Function, methodName: string): ApiFileMetadata[] {
+    return this.fileParams.filter(
+      (f) => f.target === target && f.methodName === methodName
+    );
+  }
+
+  /**
+   * Add consumes metadata
+   */
+  addConsumes(metadata: ApiConsumesMetadata): void {
+    this.consumes.push(metadata);
+  }
+
+  /**
+   * Get consumes metadata for a specific method
+   */
+  getConsumesForMethod(target: Function, methodName: string): ApiConsumesMetadata | undefined {
+    return this.consumes.find(
+      (c) => c.target === target && c.methodName === methodName
+    );
+  }
+
+  /**
+   * Add middleware metadata
+   */
+  addMiddleware(metadata: MiddlewareMetadata): void {
+    this.middlewares.push(metadata);
+  }
+
+  /**
+   * Get middlewares for a specific method
+   */
+  getMiddlewaresForMethod(target: Function, methodName: string): MiddlewareFunction[] {
+    const methodMiddlewares = this.middlewares.filter(
+      (m) => m.target === target && m.methodName === methodName
+    );
+    return methodMiddlewares.flatMap(m => m.middlewares);
+  }
+
+  /**
+   * Get controller-level middlewares
+   */
+  getMiddlewaresForController(controller: Function): MiddlewareFunction[] {
+    const controllerMiddlewares = this.middlewares.filter(
+      (m) => m.target === controller && m.methodName === undefined
+    );
+    return controllerMiddlewares.flatMap(m => m.middlewares);
   }
 
   /**
@@ -176,6 +291,11 @@ class MetadataStorageImpl {
     this.pathParams.length = 0;
     this.properties.length = 0;
     this.tags.length = 0;
+    this.securitySchemes.length = 0;
+    this.securityRequirements.length = 0;
+    this.fileParams.length = 0;
+    this.consumes.length = 0;
+    this.middlewares.length = 0;
   }
 }
 

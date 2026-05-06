@@ -1,6 +1,15 @@
-import type { OpenAPIV3 } from '../types/openapi.types.js';
+import type { OpenAPIV3, OpenAPIV3_1 } from '../types/openapi.types.js';
 import { metadataStorage } from '../metadata/metadata-storage.js';
 import type { ApiPropertyMetadata } from '../metadata/metadata-types.js';
+import {
+  extractValidationConstraints,
+  extractValidationConstraintsV31,
+  isClassValidatorAvailable,
+} from '../validation/class-validator-adapter.js';
+
+// Type aliases for both versions
+type SchemaObjectV30 = OpenAPIV3.SchemaObject;
+type SchemaObjectV31 = OpenAPIV3_1.SchemaObject;
 
 /**
  * Type to OpenAPI schema type mapping
@@ -100,6 +109,15 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
   // Add description if present
   if (metadata.description) {
     schema.description = metadata.description;
+  }
+
+  // Merge class-validator constraints if available
+  if (isClassValidatorAvailable()) {
+    const validationConstraints = extractValidationConstraints(
+      metadata.target,
+      metadata.propertyKey
+    );
+    Object.assign(schema, validationConstraints);
   }
 
   return schema;
@@ -231,6 +249,139 @@ export function generateSchemas(): Record<string, OpenAPIV3.SchemaObject> {
 
   for (const dtoClass of dtoClasses) {
     schemas[dtoClass.name] = generateSchemaForDto(dtoClass);
+  }
+
+  return schemas;
+}
+
+/**
+ * Generate schema property for OpenAPI 3.1.0
+ * Main difference: uses type array for nullable instead of nullable: true
+ */
+function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjectV31 {
+  const schema: SchemaObjectV31 = {};
+
+  // Handle array type
+  if (metadata.isArray && metadata.type) {
+    schema.type = 'array';
+
+    // Check if array item type is a primitive or DTO
+    if (isPrimitiveType(metadata.type)) {
+      schema.items = getPrimitiveSchemaV31(metadata.type);
+    } else {
+      // It's a DTO, generate reference
+      schema.items = {
+        $ref: `#/components/schemas/${metadata.type.name}`,
+      };
+    }
+  } else if (metadata.type) {
+    // Non-array type
+    if (isPrimitiveType(metadata.type)) {
+      const primitiveSchema = getPrimitiveSchemaV31(metadata.type);
+      Object.assign(schema, primitiveSchema);
+    } else {
+      // It's a DTO, generate reference
+      return {
+        $ref: `#/components/schemas/${metadata.type.name}`,
+      };
+    }
+  }
+
+  // Add enum if present
+  if (metadata.enum && metadata.enum.length > 0) {
+    schema.enum = metadata.enum as unknown[];
+  }
+
+  // Add format if present
+  if (metadata.format) {
+    schema.format = metadata.format;
+  }
+
+  // Add examples if present (3.1.0 uses examples array)
+  if (metadata.example !== undefined) {
+    schema.examples = [metadata.example];
+  }
+
+  // Add default if present
+  if (metadata.default !== undefined) {
+    schema.default = metadata.default;
+  }
+
+  // Add description if present
+  if (metadata.description) {
+    schema.description = metadata.description;
+  }
+
+  // Merge class-validator constraints if available
+  if (isClassValidatorAvailable()) {
+    const validationConstraints = extractValidationConstraintsV31(
+      metadata.target,
+      metadata.propertyKey
+    );
+    Object.assign(schema, validationConstraints);
+  }
+
+  return schema;
+}
+
+/**
+ * Get primitive schema for OpenAPI 3.1.0
+ */
+function getPrimitiveSchemaV31(type: Function): SchemaObjectV31 {
+  const schemaType = typeToOpenApiType.get(type) ?? 'string';
+
+  const schema: SchemaObjectV31 = {
+    type: schemaType,
+  };
+
+  return schema;
+}
+
+/**
+ * Generate OpenAPI 3.1.0 schema for a DTO class
+ */
+export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
+  // Check cache first
+  if (schemaCache.has(dtoClass)) {
+    return schemaCache.get(dtoClass) as SchemaObjectV31;
+  }
+
+  // Get all properties for this DTO
+  const properties = metadataStorage.getPropertiesForTarget(dtoClass);
+
+  const schema: SchemaObjectV31 = {
+    type: 'object',
+    properties: {},
+    required: [],
+  };
+
+  for (const property of properties) {
+    // Add property to schema
+    if (schema.properties) {
+      schema.properties[property.propertyKey] = propertyMetadataToSchemaV31(property);
+    }
+
+    // Add to required list if property is required
+    if (property.required && schema.required) {
+      schema.required.push(property.propertyKey);
+    }
+  }
+
+  // Cache the schema
+  schemaCache.set(dtoClass, schema as SchemaObjectV30);
+
+  return schema;
+}
+
+/**
+ * Generate all schemas for OpenAPI 3.1.0 document
+ */
+export function generateSchemasV31(): Record<string, SchemaObjectV31> {
+  const dtoClasses = collectDtoClasses();
+  const schemas: Record<string, SchemaObjectV31> = {};
+
+  for (const dtoClass of dtoClasses) {
+    schemas[dtoClass.name] = generateSchemaForDtoV31(dtoClass);
   }
 
   return schemas;

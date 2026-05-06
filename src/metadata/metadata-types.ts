@@ -124,6 +124,86 @@ export interface ApiTagsMetadata {
 }
 
 /**
+ * OAuth2 flow configuration
+ */
+export interface OAuthFlowObject {
+  authorizationUrl?: string;
+  tokenUrl?: string;
+  refreshUrl?: string;
+  scopes: Record<string, string>;
+}
+
+/**
+ * OAuth2 flows configuration
+ */
+export interface OAuthFlowsObject {
+  implicit?: OAuthFlowObject;
+  password?: OAuthFlowObject;
+  clientCredentials?: OAuthFlowObject;
+  authorizationCode?: OAuthFlowObject;
+}
+
+/**
+ * Security scheme metadata for @ApiBearerAuth, @ApiOAuth2, etc.
+ */
+export interface SecuritySchemeMetadata {
+  name: string;
+  type: 'http' | 'apiKey' | 'oauth2' | 'openIdConnect';
+  scheme: string | undefined;
+  bearerFormat: string | undefined;
+  in: 'query' | 'header' | 'cookie' | undefined;
+  flows: OAuthFlowsObject | undefined;
+  openIdConnectUrl: string | undefined;
+  description: string | undefined;
+}
+
+/**
+ * Security requirement metadata for @ApiSecurity decorator
+ */
+export interface ApiSecurityMetadata {
+  target: Function;
+  methodName?: string; // undefined for controller-level
+  schemes: string[];
+}
+
+/**
+ * Metadata for file upload decorators (@ApiFile, @ApiFiles)
+ */
+export interface ApiFileMetadata {
+  target: Function;
+  methodName: string;
+  name: string;
+  isArray: boolean;
+  required: boolean;
+  description: string | undefined;
+  maxSize: number | undefined;
+  allowedMimeTypes: string[] | undefined;
+}
+
+/**
+ * Metadata for content type override (@ApiConsumes)
+ */
+export interface ApiConsumesMetadata {
+  target: Function;
+  methodName: string;
+  contentTypes: string[];
+}
+
+/**
+ * Middleware function type
+ */
+export type MiddlewareFunction = (req: any, res: any, next: any) => void | Promise<void>;
+
+/**
+ * Metadata for middleware decorator (@Use)
+ */
+export interface MiddlewareMetadata {
+  target: Function;
+  methodName?: string; // undefined for controller-level middleware
+  middlewares: MiddlewareFunction[];
+}
+
+/**
  * Complete metadata storage structure
  */
 export interface MetadataStorage {
@@ -136,4 +216,9 @@ export interface MetadataStorage {
   pathParams: ApiParamMetadata[];
   properties: ApiPropertyMetadata[];
   tags: ApiTagsMetadata[];
+  securitySchemes: SecuritySchemeMetadata[];
+  securityRequirements: ApiSecurityMetadata[];
+  fileParams: ApiFileMetadata[];
+  consumes: ApiConsumesMetadata[];
+  middlewares: MiddlewareMetadata[];
 }

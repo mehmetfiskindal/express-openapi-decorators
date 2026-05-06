@@ -18,5 +18,10 @@ export default defineConfig({
   },
   esbuild: {
     target: 'es2020'
+  },
+  resolve: {
+    alias: {
+      '../src/index.js': '../src/index.ts',
+    }
   }
 });

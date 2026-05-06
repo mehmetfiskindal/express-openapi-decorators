@@ -12,9 +12,17 @@ export type {
   ApiParamMetadata,
   ApiPropertyMetadata,
   ApiTagsMetadata,
+  SecuritySchemeMetadata,
+  ApiSecurityMetadata,
+  ApiFileMetadata,
+  ApiConsumesMetadata,
+  MiddlewareMetadata,
+  MiddlewareFunction,
+  OAuthFlowObject,
+  OAuthFlowsObject,
 } from './metadata/metadata-types.js';
 
-// Decorators
+// Decorators - Core
 export { Controller } from './decorators/controller.decorator.js';
 export type { ControllerOptions } from './decorators/controller.decorator.js';
 export { Get, Post, Put, Patch, Delete } from './decorators/method.decorator.js';
@@ -32,6 +40,37 @@ export type { ApiParamOptions } from './decorators/api-param.decorator.js';
 export { ApiProperty, ApiPropertyOptional } from './decorators/api-property.decorator.js';
 export type { ApiPropertyOptions } from './decorators/api-property.decorator.js';
 
+// Decorators - Security
+export {
+  ApiBearerAuth,
+  ApiBasicAuth,
+  ApiApiKey,
+  ApiOAuth2,
+  ApiOpenIdConnect,
+  ApiSecurity,
+  Public,
+} from './decorators/api-security.decorator.js';
+export type {
+  ApiKeyOptions,
+  OAuth2Options,
+  OpenIdConnectOptions,
+} from './decorators/api-security.decorator.js';
+
+// Decorators - File Upload
+export {
+  ApiFile,
+  ApiFiles,
+  ApiConsumes,
+  ApiFormData,
+} from './decorators/api-file.decorator.js';
+export type {
+  ApiFileOptions,
+  ApiFilesOptions,
+} from './decorators/api-file.decorator.js';
+
+// Decorators - Middleware
+export { Use } from './decorators/middleware.decorator.js';
+
 // Generator
 export { createOpenApiDocument } from './generator/create-openapi-document.js';
 export type {
@@ -39,5 +78,24 @@ export type {
   OpenApiServer,
 } from './generator/create-openapi-document.js';
 
+// Routing
+export { ExpressAdapter, createExpressAdapter } from './routing/express-adapter.js';
+export type {
+  ExpressAdapterOptions,
+  ControllerFactory,
+} from './routing/express-adapter.js';
+
 // Types
-export type { OpenAPIV3 } from './types/openapi.types.js';
+export type { OpenAPIV3, OpenAPIV3_1, OpenApiVersion } from './types/openapi.types.js';
+export type { OpenApiDocument } from './types/openapi-3.1.types.js';
+
+// Validation (optional - only if class-validator is installed)
+export {
+  extractValidationConstraints,
+  extractValidationConstraintsV31,
+  isPropertyOptional,
+  isPropertyArray,
+  mergeValidationConstraints,
+  isClassValidatorAvailable,
+} from './validation/class-validator-adapter.js';
+
