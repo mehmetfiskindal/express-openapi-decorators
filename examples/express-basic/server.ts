@@ -16,7 +16,7 @@ import {
   ApiProperty,
   ApiPropertyOptional,
   createOpenApiDocument,
-} from '../../src/index.js';
+} from '../../dist/index.mjs';
 
 // ============================================
 // DTO Classes

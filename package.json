@@ -42,7 +42,7 @@
     "test:run": "vitest run",
     "lint": "tsc --noEmit",
     "prepare": "npm run build",
-    "example": "tsx examples/express-basic/server.ts"
+    "example:build": "npm run build && node -e \"console.log('Build successful. See README.md for usage examples.')\""
   },
   "dependencies": {
     "reflect-metadata": "^0.2.2"
