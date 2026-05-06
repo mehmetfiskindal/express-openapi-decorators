@@ -1,0 +1,64 @@
+{
+  "name": "express-openapi-decorators",
+  "version": "0.1.0",
+  "description": "NestJS-like Swagger decorators for Express.js and TypeScript",
+  "keywords": [
+    "express",
+    "openapi",
+    "swagger",
+    "decorators",
+    "typescript",
+    "api-docs"
+  ],
+  "author": "Mehmet Fiskindal",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "tsc --noEmit",
+    "prepare": "npm run build",
+    "example": "tsx examples/express-basic/server.ts"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "@types/swagger-ui-express": "^4.1.6",
+    "express": "^4.18.2",
+    "swagger-ui-express": "^5.0.0",
+    "tsup": "^8.0.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "express": "^4.0.0"
+  }
+}
