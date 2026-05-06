@@ -1,6 +1,6 @@
 {
-  "name": "express-openapi-decorators",
-  "version": "0.1.0",
+  "name": "openapi-express-decorators",
+  "version": "1.1.2",
   "description": "NestJS-like Swagger decorators for Express.js and TypeScript",
   "keywords": [
     "express",
@@ -63,7 +63,7 @@
     "tsup": "^8.0.1",
     "tsx": "^4.21.0",
     "typescript": "^5.3.3",
-    "vitest": "^1.2.0"
+    "vitest": "^4.1.5"
   },
   "peerDependencies": {
     "express": "^4.0.0"
