@@ -1,6 +1,11 @@
 # Express OpenAPI Decorators
 
-NestJS-like Swagger decorators for Express.js and TypeScript.
+[![npm version](https://img.shields.io/npm/v/express-openapi-decorators.svg)](https://www.npmjs.com/package/express-openapi-decorators)
+[![npm downloads](https://img.shields.io/npm/dm/express-openapi-decorators.svg)](https://www.npmjs.com/package/express-openapi-decorators)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/node/v/express-openapi-decorators)](https://nodejs.org/)
+
+> NestJS-like Swagger decorators for Express.js and TypeScript.
 
 Generate OpenAPI 3.0 documentation from TypeScript decorators without writing YAML, JSON, or JSDoc comments.
 
@@ -16,8 +21,29 @@ Generate OpenAPI 3.0 documentation from TypeScript decorators without writing YA
 ## Installation
 
 ```bash
+# npm
 npm install express-openapi-decorators reflect-metadata
-npm install -D @types/node
+
+# yarn
+yarn add express-openapi-decorators reflect-metadata
+
+# pnpm
+pnpm add express-openapi-decorators reflect-metadata
+```
+
+### Peer Dependencies
+
+This package requires `reflect-metadata` to be installed alongside it:
+
+```bash
+npm install reflect-metadata
+```
+
+Also make sure you have Express and swagger-ui-express installed:
+
+```bash
+npm install express swagger-ui-express
+npm install -D @types/express @types/swagger-ui-express
 ```
 
 ## Quick Start

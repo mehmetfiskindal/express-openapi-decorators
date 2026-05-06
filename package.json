@@ -10,8 +10,16 @@
     "typescript",
     "api-docs"
   ],
-  "author": "Mehmet Fiskindal",
+  "author": "Mehmet Fiskindal <mehmetfiskindal@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mehmetfiskindal/express-openapi-decorators.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mehmetfiskindal/express-openapi-decorators/issues"
+  },
+  "homepage": "https://github.com/mehmetfiskindal/express-openapi-decorators#readme",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
