@@ -499,8 +499,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] Core decorator system
 - [x] DTO schema generation
 - [x] Query and path parameters
-- [ ] Authentication decorators (@ApiBearerAuth)
-- [ ] File upload support
-- [ ] Validation integration (class-validator, zod)
-- [ ] Route registration helper
-- [ ] OpenAPI 3.1.0 support
+- [x] Authentication decorators (@ApiBearerAuth)
+- [x] File upload support
+- [x] Validation integration (class-validator, zod)
+- [x] Route registration helper
+- [x] OpenAPI 3.1.0 support
