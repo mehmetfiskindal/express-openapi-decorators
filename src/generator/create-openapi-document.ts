@@ -62,6 +62,31 @@ export interface CreateOpenApiDocumentOptions {
     name: string;
     url?: string;
   };
+
+  /**
+   * Additional components (schemas, security schemes, etc.)
+   */
+  components?: Partial<OpenAPIV3.ComponentsObject>;
+
+  /**
+   * Global security requirements
+   */
+  security?: OpenAPIV3.SecurityRequirementObject[];
+
+  /**
+   * API tags
+   */
+  tags?: OpenAPIV3.TagObject[];
+
+  /**
+   * External documentation
+   */
+  externalDocs?: OpenAPIV3.ExternalDocumentationObject;
+
+  /**
+   * Additional paths
+   */
+  paths?: OpenAPIV3.PathsObject;
 }
 
 /**
@@ -267,16 +292,62 @@ function createOpenApiDocumentV30(
   }
 
   // Generate paths from controllers
-  document.paths = generatePaths(options.controllers);
+  document.paths = {
+    ...generatePaths(options.controllers),
+    ...options.paths,
+  };
 
   // Generate schemas from DTOs
   if (document.components) {
     document.components.schemas = generateSchemas();
     // Add security schemes
     const securitySchemes = generateSecuritySchemesV30();
-    if (securitySchemes) {
-      document.components.securitySchemes = securitySchemes;
+    if (securitySchemes || options.components?.securitySchemes) {
+      document.components.securitySchemes = {
+        ...securitySchemes,
+        ...options.components?.securitySchemes,
+      } as Record<string, OpenAPIV3.SecuritySchemeObject | OpenAPIV3.ReferenceObject>;
     }
+
+    // Add other custom components
+    if (options.components) {
+      if (options.components.responses) {
+        document.components.responses = { ...document.components.responses, ...options.components.responses };
+      }
+      if (options.components.parameters) {
+        document.components.parameters = { ...document.components.parameters, ...options.components.parameters };
+      }
+      if (options.components.headers) {
+        document.components.headers = { ...document.components.headers, ...options.components.headers };
+      }
+      if (options.components.links) {
+        document.components.links = { ...document.components.links, ...options.components.links };
+      }
+      if (options.components.callbacks) {
+        document.components.callbacks = { ...document.components.callbacks, ...options.components.callbacks };
+      }
+      if (options.components.examples) {
+        document.components.examples = { ...document.components.examples, ...options.components.examples };
+      }
+      if (options.components.requestBodies) {
+        document.components.requestBodies = { ...document.components.requestBodies, ...options.components.requestBodies };
+      }
+    }
+  }
+
+  // Add global security
+  if (options.security) {
+    document.security = options.security;
+  }
+
+  // Add tags
+  if (options.tags) {
+    document.tags = options.tags;
+  }
+
+  // Add externalDocs
+  if (options.externalDocs) {
+    document.externalDocs = options.externalDocs;
   }
 
   return document;
@@ -318,16 +389,67 @@ function createOpenApiDocumentV31(
   }
 
   // Generate paths from controllers
-  document.paths = generatePathsV31(options.controllers);
+  document.paths = {
+    ...generatePathsV31(options.controllers),
+    ...(options.paths as OpenAPIV3_1.PathsObject),
+  };
 
   // Generate schemas from DTOs
   if (document.components) {
     document.components.schemas = generateSchemasV31();
     // Add security schemes
     const securitySchemes = generateSecuritySchemesV31();
-    if (securitySchemes) {
-      document.components.securitySchemes = securitySchemes;
+    if (securitySchemes || options.components?.securitySchemes) {
+      document.components.securitySchemes = {
+        ...securitySchemes,
+        ...options.components?.securitySchemes,
+      } as Record<string, OpenAPIV3_1.SecuritySchemeObject | OpenAPIV3_1.ReferenceObject>;
     }
+
+    // Add other custom components
+    if (options.components) {
+      // Cast to OpenAPIV3_1.ComponentsObject as the options uses V3 shape for simplicity
+      const customComponents = options.components as OpenAPIV3_1.ComponentsObject;
+      if (customComponents.responses) {
+        document.components.responses = { ...document.components.responses, ...customComponents.responses };
+      }
+      if (customComponents.parameters) {
+        document.components.parameters = { ...document.components.parameters, ...customComponents.parameters };
+      }
+      if (customComponents.headers) {
+        document.components.headers = { ...document.components.headers, ...customComponents.headers };
+      }
+      if (customComponents.links) {
+        document.components.links = { ...document.components.links, ...customComponents.links };
+      }
+      if (customComponents.callbacks) {
+        document.components.callbacks = { ...document.components.callbacks, ...customComponents.callbacks };
+      }
+      if (customComponents.examples) {
+        document.components.examples = { ...document.components.examples, ...customComponents.examples };
+      }
+      if (customComponents.requestBodies) {
+        document.components.requestBodies = { ...document.components.requestBodies, ...customComponents.requestBodies };
+      }
+      if (customComponents.pathItems) {
+        document.components.pathItems = { ...document.components.pathItems, ...customComponents.pathItems };
+      }
+    }
+  }
+
+  // Add global security
+  if (options.security) {
+    document.security = options.security;
+  }
+
+  // Add tags
+  if (options.tags) {
+    document.tags = options.tags as OpenAPIV3_1.TagObject[];
+  }
+
+  // Add externalDocs
+  if (options.externalDocs) {
+    document.externalDocs = options.externalDocs as OpenAPIV3_1.ExternalDocumentationObject;
   }
 
   return document;

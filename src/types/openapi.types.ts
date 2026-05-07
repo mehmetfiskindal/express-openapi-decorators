@@ -7,6 +7,24 @@ import type { OpenAPIV3_1, OpenApiVersion } from './openapi-3.1.types.js';
 
 export { OpenAPIV3_1, OpenApiVersion };
 
+export type OpenAPIObject = OpenAPIV3.Document;
+export type SecuritySchemeObject = OpenAPIV3.SecuritySchemeObject;
+export type InfoObject = OpenAPIV3.InfoObject;
+export type ServerObject = OpenAPIV3.ServerObject;
+export type PathsObject = OpenAPIV3.PathsObject;
+export type PathItemObject = OpenAPIV3.PathItemObject;
+export type OperationObject = OpenAPIV3.OperationObject;
+export type ParameterObject = OpenAPIV3.ParameterObject;
+export type ReferenceObject = OpenAPIV3.ReferenceObject;
+export type RequestBodyObject = OpenAPIV3.RequestBodyObject;
+export type ResponsesObject = OpenAPIV3.ResponsesObject;
+export type ResponseObject = OpenAPIV3.ResponseObject;
+export type SchemaObject = OpenAPIV3.SchemaObject;
+export type ComponentsObject = OpenAPIV3.ComponentsObject;
+export type SecurityRequirementObject = OpenAPIV3.SecurityRequirementObject;
+export type TagObject = OpenAPIV3.TagObject;
+export type ExternalDocumentationObject = OpenAPIV3.ExternalDocumentationObject;
+
 export namespace OpenAPIV3 {
   export interface Document {
     openapi: string;

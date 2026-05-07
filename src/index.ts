@@ -86,7 +86,28 @@ export type {
 } from './routing/express-adapter.js';
 
 // Types
-export type { OpenAPIV3, OpenAPIV3_1, OpenApiVersion } from './types/openapi.types.js';
+export type {
+  OpenAPIV3,
+  OpenAPIV3_1,
+  OpenApiVersion,
+  OpenAPIObject,
+  SecuritySchemeObject,
+  InfoObject,
+  ServerObject,
+  PathsObject,
+  PathItemObject,
+  OperationObject,
+  ParameterObject,
+  ReferenceObject,
+  RequestBodyObject,
+  ResponsesObject,
+  ResponseObject,
+  SchemaObject,
+  ComponentsObject,
+  SecurityRequirementObject,
+  TagObject,
+  ExternalDocumentationObject,
+} from './types/openapi.types.js';
 export type { OpenApiDocument } from './types/openapi-3.1.types.js';
 
 // Validation (optional - only if class-validator is installed)
