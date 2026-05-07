@@ -27,6 +27,8 @@ export { Controller } from './decorators/controller.decorator.js';
 export type { ControllerOptions } from './decorators/controller.decorator.js';
 export { Get, Post, Put, Patch, Delete } from './decorators/method.decorator.js';
 export { ApiTags } from './decorators/api-tags.decorator.js';
+// NestJS-compatible alias
+export { ApiTags as Tags } from './decorators/api-tags.decorator.js';
 export { ApiOperation } from './decorators/api-operation.decorator.js';
 export type { ApiOperationOptions } from './decorators/api-operation.decorator.js';
 export { ApiResponse } from './decorators/api-response.decorator.js';
