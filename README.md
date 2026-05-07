@@ -1,9 +1,9 @@
 # Express OpenAPI Decorators
 
-[![npm version](https://img.shields.io/npm/v/express-openapi-decorators.svg)](https://www.npmjs.com/package/express-openapi-decorators)
-[![npm downloads](https://img.shields.io/npm/dm/express-openapi-decorators.svg)](https://www.npmjs.com/package/express-openapi-decorators)
+[![npm version](https://img.shields.io/npm/v/@developersailor/express-openapi-decorators.svg)](https://www.npmjs.com/package/@developersailor/express-openapi-decorators)
+[![npm downloads](https://img.shields.io/npm/dm/@developersailor/express-openapi-decorators.svg)](https://www.npmjs.com/package/@developersailor/express-openapi-decorators)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/node/v/express-openapi-decorators)](https://nodejs.org/)
+[![Node.js Version](https://img.shields.io/node/v/@developersailor/express-openapi-decorators)](https://nodejs.org/)
 
 > NestJS-like Swagger decorators for Express.js and TypeScript.
 
