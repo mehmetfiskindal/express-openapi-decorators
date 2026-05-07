@@ -29,7 +29,7 @@ export interface ApiOperationOptions {
 
 /**
  * @ApiOperation decorator - adds OpenAPI operation metadata to an endpoint
- * 
+ *
  * @example
  * ```typescript
  * @Controller('/users')
@@ -55,5 +55,64 @@ export function ApiOperation(options: ApiOperationOptions): MethodDecorator {
     };
 
     metadataStorage.addOperation(metadata);
+  };
+}
+
+/**
+ * @Summary decorator - shorthand for @ApiOperation with only summary
+ *
+ * @example
+ * ```typescript
+ * @Controller('/users')
+ * export class UserController {
+ *   @Get('/')
+ *   @Summary('List all users')
+ *   getUsers() {}
+ * }
+ * ```
+ */
+export function Summary(summary: string): MethodDecorator {
+  return ApiOperation({ summary });
+}
+
+/**
+ * @Description decorator - adds or appends description to operation metadata
+ * Can be used alone (creates operation with empty summary) or combined with @Summary
+ *
+ * @example
+ * ```typescript
+ * @Controller('/users')
+ * export class UserController {
+ *   @Get('/')
+ *   @Summary('List all users')
+ *   @Description('Returns a paginated list of all users with filtering options')
+ *   getUsers() {}
+ * }
+ * ```
+ */
+export function Description(description: string): MethodDecorator {
+  return (target, propertyKey, _descriptor) => {
+    const existingOperation = metadataStorage.getOperationForMethod(
+      target.constructor as Function,
+      propertyKey as string
+    );
+
+    if (existingOperation) {
+      // Append to existing description if any
+      existingOperation.description = existingOperation.description
+        ? `${existingOperation.description}\n\n${description}`
+        : description;
+    } else {
+      // Create new operation with empty summary
+      const metadata: ApiOperationMetadata = {
+        target: target.constructor as Function,
+        methodName: propertyKey as string,
+        summary: '',
+        description: description,
+        operationId: undefined,
+        deprecated: false,
+      };
+      metadataStorage.addOperation(metadata);
+    }
   };
 }

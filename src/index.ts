@@ -18,6 +18,7 @@ export type {
   ApiConsumesMetadata,
   MiddlewareMetadata,
   MiddlewareFunction,
+  MiddlewareReference,
   OAuthFlowObject,
   OAuthFlowsObject,
 } from './metadata/metadata-types.js';
@@ -29,7 +30,7 @@ export { Get, Post, Put, Patch, Delete } from './decorators/method.decorator.js'
 export { ApiTags } from './decorators/api-tags.decorator.js';
 // NestJS-compatible alias
 export { ApiTags as Tags } from './decorators/api-tags.decorator.js';
-export { ApiOperation } from './decorators/api-operation.decorator.js';
+export { ApiOperation, Summary, Description } from './decorators/api-operation.decorator.js';
 export type { ApiOperationOptions } from './decorators/api-operation.decorator.js';
 export { ApiResponse } from './decorators/api-response.decorator.js';
 export type { ApiResponseOptions } from './decorators/api-response.decorator.js';
@@ -50,6 +51,8 @@ export {
   ApiOAuth2,
   ApiOpenIdConnect,
   ApiSecurity,
+  // Simple alias for ApiSecurity
+  Security,
   Public,
 } from './decorators/api-security.decorator.js';
 export type {
@@ -71,7 +74,7 @@ export type {
 } from './decorators/api-file.decorator.js';
 
 // Decorators - Middleware
-export { Use } from './decorators/middleware.decorator.js';
+export { Use, Middleware } from './decorators/middleware.decorator.js';
 
 // Generator
 export { createOpenApiDocument } from './generator/create-openapi-document.js';
@@ -81,10 +84,15 @@ export type {
 } from './generator/create-openapi-document.js';
 
 // Routing
-export { ExpressAdapter, createExpressAdapter } from './routing/express-adapter.js';
+export {
+  ExpressAdapter,
+  createExpressAdapter,
+  createRouterFromControllers,
+} from './routing/express-adapter.js';
 export type {
   ExpressAdapterOptions,
   ControllerFactory,
+  CreateRouterOptions,
 } from './routing/express-adapter.js';
 
 // Types

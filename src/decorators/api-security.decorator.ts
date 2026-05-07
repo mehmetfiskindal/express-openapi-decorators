@@ -291,14 +291,14 @@ export function ApiOpenIdConnect(
  * Generic security decorator that can reference any registered security scheme
  * @param names - Names of security schemes to apply
  * @returns Class or method decorator
- * 
+ *
  * @example
  * ```typescript
  * // Apply single scheme
  * @ApiSecurity('bearer')
  * @Get('/protected')
  * protectedRoute() {}
- * 
+ *
  * // Apply multiple schemes (AND logic - all required)
  * @ApiSecurity('bearer', 'apiKey')
  * @Get('/double-protected')
@@ -322,6 +322,25 @@ export function ApiSecurity(...names: string[]): ClassDecorator & MethodDecorato
     }
   } as ClassDecorator & MethodDecorator;
 }
+
+/**
+ * Alias for @ApiSecurity decorator
+ * Simpler syntax for applying security schemes
+ *
+ * @example
+ * ```typescript
+ * // Apply single scheme
+ * @Security('bearerAuth')
+ * @Get('/protected')
+ * protectedRoute() {}
+ *
+ * // Apply multiple schemes
+ * @Security('bearerAuth', 'apiKey')
+ * @Get('/double-protected')
+ * doubleProtectedRoute() {}
+ * ```
+ */
+export const Security = ApiSecurity;
 
 /**
  * Explicitly mark a route as having no security (public endpoint)

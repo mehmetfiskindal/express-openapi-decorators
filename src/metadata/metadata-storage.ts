@@ -14,7 +14,7 @@ import type {
   ApiFileMetadata,
   ApiConsumesMetadata,
   MiddlewareMetadata,
-  MiddlewareFunction,
+  MiddlewareReference,
 } from './metadata-types.js';
 
 /**
@@ -187,7 +187,7 @@ class MetadataStorageImpl {
   /**
    * Get middlewares for a specific method
    */
-  getMiddlewaresForMethod(target: Function, methodName: string): MiddlewareFunction[] {
+  getMiddlewaresForMethod(target: Function, methodName: string): MiddlewareReference[] {
     const methodMiddlewares = this.middlewares.filter(
       (m) => m.target === target && m.methodName === methodName
     );
@@ -197,7 +197,7 @@ class MetadataStorageImpl {
   /**
    * Get controller-level middlewares
    */
-  getMiddlewaresForController(controller: Function): MiddlewareFunction[] {
+  getMiddlewaresForController(controller: Function): MiddlewareReference[] {
     const controllerMiddlewares = this.middlewares.filter(
       (m) => m.target === controller && m.methodName === undefined
     );

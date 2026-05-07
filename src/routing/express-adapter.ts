@@ -5,7 +5,7 @@
 
 import type { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import { metadataStorage } from '../metadata/metadata-storage.js';
-import type { MethodMetadata, MiddlewareFunction } from '../metadata/metadata-types.js';
+import type { MethodMetadata, MiddlewareFunction, MiddlewareReference } from '../metadata/metadata-types.js';
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
@@ -22,7 +22,7 @@ export interface ExpressAdapterOptions {
    * Factory function to create controller instances
    * Default: creates new instance with `new controllerClass()`
    */
-  controllerFactory?: ControllerFactory;
+  controllerFactory?: ControllerFactory | undefined;
   
   /**
    * Global prefix for all routes
@@ -34,6 +34,19 @@ export interface ExpressAdapterOptions {
    * Global middlewares to apply to all routes
    */
   globalMiddlewares?: MiddlewareFunction[];
+  
+  /**
+   * Named middleware registry for string-based middleware references
+   * Used to resolve @Middleware('name') decorators
+   * @example
+   * ```typescript
+   * {
+   *   auth: authMiddleware,
+   *   'roles:admin': requireRoles(['admin'])
+   * }
+   * ```
+   */
+  namedMiddlewares?: Record<string, MiddlewareFunction>;
 }
 
 /**
@@ -58,6 +71,7 @@ export interface ExpressAdapterOptions {
 export class ExpressAdapter {
   private router: Router;
   private options: ExpressAdapterOptions;
+  private namedMiddlewares: Map<string, MiddlewareFunction>;
 
   constructor(
     private app: { use: (path: string, router: Router) => void } | Router,
@@ -67,8 +81,12 @@ export class ExpressAdapter {
       controllerFactory: (controllerClass) => new (controllerClass as new () => any)(),
       globalPrefix: '',
       globalMiddlewares: [],
+      namedMiddlewares: {},
       ...options,
     };
+    
+    // Initialize named middlewares registry
+    this.namedMiddlewares = new Map(Object.entries(this.options.namedMiddlewares || {}));
     
     // Create a router if app is an Express app
     this.router = this.createRouter();
@@ -82,6 +100,47 @@ export class ExpressAdapter {
         // It's an Express app, router will be mounted automatically
       }
     }
+  }
+  
+  /**
+   * Register a named middleware for string-based references
+   * @param name - Middleware name/identifier
+   * @param middleware - Middleware function
+   */
+  registerNamedMiddleware(name: string, middleware: MiddlewareFunction): void {
+    this.namedMiddlewares.set(name, middleware);
+  }
+  
+  /**
+   * Register multiple named middlewares
+   * @param middlewares - Object with name -> middleware pairs
+   */
+  registerNamedMiddlewares(middlewares: Record<string, MiddlewareFunction>): void {
+    for (const [name, middleware] of Object.entries(middlewares)) {
+      this.namedMiddlewares.set(name, middleware);
+    }
+  }
+  
+  /**
+   * Resolve a middleware reference to actual middleware function
+   * @param ref - Middleware reference (function or string)
+   * @returns Resolved middleware function
+   * @throws Error if string reference not found in registry
+   */
+  private resolveMiddleware(ref: MiddlewareReference): MiddlewareFunction {
+    if (typeof ref === 'function') {
+      return ref;
+    }
+    
+    const middleware = this.namedMiddlewares.get(ref);
+    if (!middleware) {
+      throw new Error(
+        `Named middleware '${ref}' not found. ` +
+        `Make sure to register it via namedMiddlewares option or registerNamedMiddleware(). ` +
+        `Available middlewares: [${Array.from(this.namedMiddlewares.keys()).join(', ')}]`
+      );
+    }
+    return middleware;
   }
 
   /**
@@ -122,8 +181,8 @@ export class ExpressAdapter {
 
     const methods = metadataStorage.getMethodsForController(controller);
     const controllerMiddlewares = metadataStorage.getMiddlewaresForController(controller);
-    
-    // Create controller instance
+
+    // Create controller instance using factory
     const instance = this.options.controllerFactory!(controller);
 
     for (const method of methods) {
@@ -143,19 +202,24 @@ export class ExpressAdapter {
     basePath: string,
     method: MethodMetadata,
     instance: any,
-    controllerMiddlewares: MiddlewareFunction[]
+    controllerMiddlewares: MiddlewareReference[]
   ): void {
     const fullPath = this.buildPath(basePath, method.path);
     const methodMiddlewares = metadataStorage.getMiddlewaresForMethod(
       method.controllerTarget,
       method.methodName
     );
+
+    // Resolve all middleware references to functions
+    const resolvedGlobalMiddlewares = (this.options.globalMiddlewares || []);
+    const resolvedControllerMiddlewares = controllerMiddlewares.map(m => this.resolveMiddleware(m));
+    const resolvedMethodMiddlewares = methodMiddlewares.map(m => this.resolveMiddleware(m));
     
     // Combine all middlewares: global -> controller -> method
     const middlewares: MiddlewareFunction[] = [
-      ...(this.options.globalMiddlewares || []),
-      ...controllerMiddlewares,
-      ...methodMiddlewares,
+      ...resolvedGlobalMiddlewares,
+      ...resolvedControllerMiddlewares,
+      ...resolvedMethodMiddlewares,
     ];
 
     // Get the handler function from the controller instance
@@ -236,4 +300,81 @@ export function createExpressAdapter(
   options?: ExpressAdapterOptions
 ): ExpressAdapter {
   return new ExpressAdapter(app, options);
+}
+
+/**
+ * Options for createRouterFromControllers
+ */
+export interface CreateRouterOptions {
+  /**
+   * Global prefix for all routes (e.g., '/api/v1')
+   */
+  prefix?: string;
+
+  /**
+   * Global middlewares to apply to all routes
+   */
+  middlewares?: MiddlewareFunction[];
+
+  /**
+   * Controller instance factory
+   */
+  controllerFactory?: ControllerFactory | undefined;
+
+  /**
+   * Named middleware registry for string-based middleware references
+   * @example
+   * ```typescript
+   * {
+   *   auth: authMiddleware,
+   *   'roles:admin': requireRoles(['admin'])
+   * }
+   * ```
+   */
+  namedMiddlewares?: Record<string, MiddlewareFunction>;
+}
+
+/**
+ * Create an Express router from decorated controllers
+ * Simplified API for quick setup
+ * 
+ * @example
+ * ```typescript
+ * import express from 'express';
+ * import { createRouterFromControllers } from '@developersailor/express-openapi-decorators';
+ * import { authMiddleware, requireRoles } from '@developersailor/express-auth';
+ * 
+ * const app = express();
+ * 
+ * const router = createRouterFromControllers(
+ *   [ProfileController],
+ *   {
+ *     prefix: '/api',
+ *     namedMiddlewares: {
+ *       auth: authMiddleware(jwtService),
+ *       'roles:admin': requireRoles('admin')
+ *     }
+ *   }
+ * );
+ * 
+ * app.use(router);
+ * ```
+ */
+export function createRouterFromControllers(
+  controllers: Function[],
+  options: CreateRouterOptions = {}
+): Router {
+  const express = require('express');
+  const app = express();
+
+  const adapter = new ExpressAdapter(app, {
+    globalPrefix: options.prefix || '',
+    globalMiddlewares: options.middlewares || [],
+    controllerFactory: options.controllerFactory,
+    namedMiddlewares: options.namedMiddlewares || {},
+  });
+
+  adapter.registerControllers(controllers);
+
+  return adapter.getRouter();
 }

@@ -195,12 +195,17 @@ export interface ApiConsumesMetadata {
 export type MiddlewareFunction = (req: any, res: any, next: any) => void | Promise<void>;
 
 /**
- * Metadata for middleware decorator (@Use)
+ * Middleware reference - can be a function or a string key
+ */
+export type MiddlewareReference = MiddlewareFunction | string;
+
+/**
+ * Metadata for middleware decorator (@Use, @Middleware)
  */
 export interface MiddlewareMetadata {
   target: Function;
   methodName?: string; // undefined for controller-level middleware
-  middlewares: MiddlewareFunction[];
+  middlewares: MiddlewareReference[];
 }
 
 /**
