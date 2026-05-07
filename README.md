@@ -22,13 +22,13 @@ Generate OpenAPI 3.0 documentation from TypeScript decorators without writing YA
 
 ```bash
 # npm
-npm install express-openapi-decorators reflect-metadata
+npm install @developersailor/express-openapi-decorators reflect-metadata
 
 # yarn
-yarn add express-openapi-decorators reflect-metadata
+yarn add @developersailor/express-openapi-decorators reflect-metadata
 
 # pnpm
-pnpm add express-openapi-decorators reflect-metadata
+pnpm add @developersailor/express-openapi-decorators reflect-metadata
 ```
 
 ### Peer Dependencies
@@ -72,7 +72,7 @@ import 'reflect-metadata';
 ### 3. Create DTOs with @ApiProperty
 
 ```typescript
-import { ApiProperty, ApiPropertyOptional } from 'express-openapi-decorators';
+import { ApiProperty, ApiPropertyOptional } from '@developersailor/express-openapi-decorators';
 
 export class UserDto {
   @ApiProperty({
@@ -152,7 +152,7 @@ import {
   ApiBody,
   ApiQuery,
   ApiParam,
-} from 'express-openapi-decorators';
+} from '@developersailor/express-openapi-decorators';
 import { Request, Response } from 'express';
 import { UserDto, CreateUserDto } from './dto/user.dto';
 
@@ -280,7 +280,7 @@ export class UserController {
 import 'reflect-metadata';
 import express from 'express';
 import swaggerUi from 'swagger-ui-express';
-import { createOpenApiDocument } from 'express-openapi-decorators';
+import { createOpenApiDocument } from '@developersailor/express-openapi-decorators';
 import { UserController } from './controllers/user.controller';
 
 const app = express();
