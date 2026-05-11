@@ -1,6 +1,6 @@
 {
   "name": "@developersailor/express-openapi-decorators",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "NestJS-like Swagger decorators for Express.js and TypeScript",
   "keywords": [
     "express",
