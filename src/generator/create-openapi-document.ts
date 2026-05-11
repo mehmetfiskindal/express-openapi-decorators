@@ -154,7 +154,7 @@ function generateSecuritySchemesV30(): Record<string, OpenAPIV3.SecuritySchemeOb
         const apiKeyScheme: OpenAPIV3.ApiKeySecurityScheme = {
           type: 'apiKey',
           in: scheme.in!,
-          name: scheme.name,
+          name: scheme.apiKeyName ?? scheme.name,
         };
         if (scheme.description !== undefined) {
           apiKeyScheme.description = scheme.description;
@@ -219,7 +219,7 @@ function generateSecuritySchemesV31(): Record<string, OpenAPIV3_1.SecurityScheme
         const apiKeyScheme: OpenAPIV3_1.ApiKeySecurityScheme = {
           type: 'apiKey',
           in: scheme.in!,
-          name: scheme.name,
+          name: scheme.apiKeyName ?? scheme.name,
         };
         if (scheme.description !== undefined) {
           apiKeyScheme.description = scheme.description;
@@ -299,7 +299,10 @@ function createOpenApiDocumentV30(
 
   // Generate schemas from DTOs
   if (document.components) {
-    document.components.schemas = generateSchemas();
+    document.components.schemas = {
+      ...generateSchemas(),
+      ...options.components?.schemas,
+    };
     // Add security schemes
     const securitySchemes = generateSecuritySchemesV30();
     if (securitySchemes || options.components?.securitySchemes) {
@@ -396,7 +399,10 @@ function createOpenApiDocumentV31(
 
   // Generate schemas from DTOs
   if (document.components) {
-    document.components.schemas = generateSchemasV31();
+    document.components.schemas = {
+      ...generateSchemasV31(),
+      ...((options.components as OpenAPIV3_1.ComponentsObject | undefined)?.schemas),
+    };
     // Add security schemes
     const securitySchemes = generateSecuritySchemesV31();
     if (securitySchemes || options.components?.securitySchemes) {

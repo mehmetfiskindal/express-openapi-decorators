@@ -63,6 +63,7 @@ export function ApiBearerAuth(
     // Register the security scheme
     metadataStorage.addSecurityScheme({
       name,
+      apiKeyName: undefined,
       type: 'http',
       scheme: 'bearer',
       bearerFormat: options?.bearerFormat ?? 'JWT',
@@ -111,6 +112,7 @@ export function ApiBasicAuth(
     // Register the security scheme
     metadataStorage.addSecurityScheme({
       name,
+      apiKeyName: undefined,
       type: 'http',
       scheme: 'basic',
       description,
@@ -157,6 +159,7 @@ export function ApiApiKey(
     // Register the security scheme
     metadataStorage.addSecurityScheme({
       name,
+      apiKeyName: options.name,
       type: 'apiKey',
       in: options.in,
       description: options.description,
@@ -214,6 +217,7 @@ export function ApiOAuth2(
     // Register the security scheme
     metadataStorage.addSecurityScheme({
       name,
+      apiKeyName: undefined,
       type: 'oauth2',
       flows: options.flows,
       description: options.description,
@@ -262,6 +266,7 @@ export function ApiOpenIdConnect(
     // Register the security scheme
     metadataStorage.addSecurityScheme({
       name,
+      apiKeyName: undefined,
       type: 'openIdConnect',
       openIdConnectUrl: options.url,
       description: options.description,

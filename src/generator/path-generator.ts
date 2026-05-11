@@ -25,24 +25,16 @@ const httpMethodToPathKey: Record<HttpMethod, keyof OpenAPIV3.PathItemObject> = 
  * Build the full path from controller base path and method path
  */
 function buildFullPath(basePath: string, methodPath: string): string {
-  // Normalize base path
-  let fullPath = basePath;
-  
-  // Ensure no double slashes
   if (methodPath === '/') {
-    return fullPath || '/';
+    return convertExpressParamsToOpenApi(basePath || '/');
   }
-  
-  if (!methodPath.startsWith('/')) {
-    methodPath = '/' + methodPath;
-  }
-  
-  fullPath = basePath + methodPath;
-  
+
+  const normalizedBasePath = basePath === '/' ? '' : basePath;
+  const normalizedMethodPath = methodPath.startsWith('/') ? methodPath : `/${methodPath}`;
+  const fullPath = normalizedBasePath + normalizedMethodPath;
+
   // Convert Express-style parameters (:id) to OpenAPI style ({id})
-  fullPath = convertExpressParamsToOpenApi(fullPath);
-  
-  return fullPath;
+  return convertExpressParamsToOpenApi(fullPath || '/');
 }
 
 /**
@@ -61,6 +53,34 @@ function getPrimitiveTypeName(type: Function): 'string' | 'number' | 'boolean' {
   if (type === Number) return 'number';
   if (type === Boolean) return 'boolean';
   return 'string';
+}
+
+function isPrimitiveType(type: Function): boolean {
+  return type === String || type === Number || type === Boolean || type === Object;
+}
+
+function schemaForType(type: Function): OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject {
+  if (isPrimitiveType(type)) {
+    return {
+      type: type === Object ? 'object' : getPrimitiveTypeName(type),
+    };
+  }
+
+  return {
+    $ref: `#/components/schemas/${type.name}`,
+  };
+}
+
+function schemaForTypeV31(type: Function): OpenAPIV3_1.SchemaObject | OpenAPIV3_1.ReferenceObject {
+  if (isPrimitiveType(type)) {
+    return {
+      type: type === Object ? 'object' : getPrimitiveTypeName(type),
+    };
+  }
+
+  return {
+    $ref: `#/components/schemas/${type.name}`,
+  };
 }
 
 /**
@@ -205,9 +225,7 @@ function generateRequestBody(target: Function, methodName: string): OpenAPIV3.Re
     required: bodyParam.required ?? true,
     content: {
       [contentType]: {
-        schema: {
-          $ref: `#/components/schemas/${bodyParam.type.name}`,
-        },
+        schema: schemaForType(bodyParam.type),
       },
     },
   };
@@ -238,14 +256,10 @@ function generateResponses(target: Function, methodName: string): OpenAPIV3.Resp
       if (responseMeta.isArray) {
         schema = {
           type: 'array',
-          items: {
-            $ref: `#/components/schemas/${responseMeta.type.name}`,
-          },
+          items: schemaForType(responseMeta.type),
         };
       } else {
-        schema = {
-          $ref: `#/components/schemas/${responseMeta.type.name}`,
-        };
+        schema = schemaForType(responseMeta.type);
       }
 
       response.content = {
@@ -574,9 +588,7 @@ function generateRequestBodyV31(target: Function, methodName: string): RequestBo
     required: bodyParam.required ?? true,
     content: {
       [contentType]: {
-        schema: {
-          $ref: `#/components/schemas/${bodyParam.type.name}`,
-        },
+        schema: schemaForTypeV31(bodyParam.type),
       },
     },
   };
@@ -607,14 +619,10 @@ function generateResponsesV31(target: Function, methodName: string): OpenAPIV3_1
       if (responseMeta.isArray) {
         schema = {
           type: 'array',
-          items: {
-            $ref: `#/components/schemas/${responseMeta.type.name}`,
-          },
+          items: schemaForTypeV31(responseMeta.type),
         };
       } else {
-        schema = {
-          $ref: `#/components/schemas/${responseMeta.type.name}`,
-        };
+        schema = schemaForTypeV31(responseMeta.type);
       }
 
       response.content = {

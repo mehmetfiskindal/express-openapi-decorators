@@ -148,6 +148,7 @@ export interface OAuthFlowsObject {
  */
 export interface SecuritySchemeMetadata {
   name: string;
+  apiKeyName: string | undefined;
   type: 'http' | 'apiKey' | 'oauth2' | 'openIdConnect';
   scheme: string | undefined;
   bearerFormat: string | undefined;

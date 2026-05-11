@@ -8,7 +8,6 @@ import {
 } from '../validation/class-validator-adapter.js';
 
 // Type aliases for both versions
-type SchemaObjectV30 = OpenAPIV3.SchemaObject;
 type SchemaObjectV31 = OpenAPIV3_1.SchemaObject;
 
 /**
@@ -34,7 +33,8 @@ const typeToOpenApiFormat = new Map<Function, string | undefined>([
 /**
  * Schema cache to avoid generating same schema multiple times
  */
-const schemaCache = new Map<Function, OpenAPIV3.SchemaObject>();
+const schemaCacheV30 = new Map<Function, OpenAPIV3.SchemaObject>();
+const schemaCacheV31 = new Map<Function, SchemaObjectV31>();
 
 /**
  * Convert a primitive type to OpenAPI schema
@@ -80,9 +80,9 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
       Object.assign(schema, primitiveSchema);
     } else {
       // It's a DTO, generate reference
-      return {
+      schema.allOf = [{
         $ref: `#/components/schemas/${metadata.type.name}`,
-      } as OpenAPIV3.ReferenceObject;
+      } as OpenAPIV3.ReferenceObject];
     }
   }
 
@@ -142,8 +142,8 @@ function isPrimitiveType(type: Function): boolean {
  */
 export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject {
   // Check cache first
-  if (schemaCache.has(dtoClass)) {
-    return schemaCache.get(dtoClass)!;
+  if (schemaCacheV30.has(dtoClass)) {
+    return schemaCacheV30.get(dtoClass)!;
   }
 
   // Get all properties for this DTO
@@ -168,7 +168,7 @@ export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject
   }
 
   // Cache the schema
-  schemaCache.set(dtoClass, schema);
+  schemaCacheV30.set(dtoClass, schema);
 
   return schema;
 }
@@ -181,14 +181,16 @@ export function collectDtoClasses(): Set<Function> {
 
   // Collect from responses
   for (const response of metadataStorage.responses) {
-    if (response.type) {
+    if (response.type && !isPrimitiveType(response.type)) {
       dtoClasses.add(response.type);
     }
   }
 
   // Collect from body parameters
   for (const bodyParam of metadataStorage.bodyParams) {
-    dtoClasses.add(bodyParam.type);
+    if (!isPrimitiveType(bodyParam.type)) {
+      dtoClasses.add(bodyParam.type);
+    }
   }
 
   // Collect from query parameters (for complex types, though unlikely)
@@ -276,9 +278,9 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
       Object.assign(schema, primitiveSchema);
     } else {
       // It's a DTO, generate reference
-      return {
+      schema.allOf = [{
         $ref: `#/components/schemas/${metadata.type.name}`,
-      } as OpenAPIV3_1.ReferenceObject;
+      } as OpenAPIV3_1.ReferenceObject];
     }
   }
 
@@ -337,8 +339,8 @@ function getPrimitiveSchemaV31(type: Function): SchemaObjectV31 {
  */
 export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
   // Check cache first
-  if (schemaCache.has(dtoClass)) {
-    return schemaCache.get(dtoClass) as unknown as SchemaObjectV31;
+  if (schemaCacheV31.has(dtoClass)) {
+    return schemaCacheV31.get(dtoClass)!;
   }
 
   // Get all properties for this DTO
@@ -363,7 +365,7 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
   }
 
   // Cache the schema
-  schemaCache.set(dtoClass, schema as unknown as SchemaObjectV30);
+  schemaCacheV31.set(dtoClass, schema);
 
   return schema;
 }
@@ -386,5 +388,6 @@ export function generateSchemasV31(): Record<string, SchemaObjectV31> {
  * Clear the schema cache (useful for testing)
  */
 export function clearSchemaCache(): void {
-  schemaCache.clear();
+  schemaCacheV30.clear();
+  schemaCacheV31.clear();
 }

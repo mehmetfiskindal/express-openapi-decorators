@@ -2,12 +2,6 @@ import 'reflect-metadata';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as mod from '../src/index.js';
 
-// Debug imports
-console.log('Module keys:', Object.keys(mod));
-console.log('ApiBearerAuth type:', typeof mod.ApiBearerAuth);
-console.log('ApiFile type:', typeof mod.ApiFile);
-console.log('ExpressAdapter type:', typeof mod.ExpressAdapter);
-
 const {
   Controller,
   Get,
@@ -38,6 +32,7 @@ const {
   ApiFormData,
   Use,
   ExpressAdapter,
+  createRouterFromControllers,
 } = mod;
 
 describe('Metadata Storage', () => {
@@ -321,6 +316,23 @@ describe('OpenAPI Document Generator', () => {
     expect(document.paths['/users/:id']).toBeUndefined();
   });
 
+  it('should not generate double slashes for root controller paths', () => {
+    @Controller('/')
+    class RootController {
+      @Get('/health')
+      health() {}
+    }
+
+    const document = createOpenApiDocument({
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [RootController],
+    });
+
+    expect(document.paths['/health']).toBeDefined();
+    expect(document.paths['//health']).toBeUndefined();
+  });
+
   it('should include query parameters in operation', () => {
     @Controller('/users')
     class UserController {
@@ -347,6 +359,135 @@ describe('OpenAPI Document Generator', () => {
     expect(pageParam?.in).toBe('query');
     expect(limitParam).toBeDefined();
     expect(limitParam?.in).toBe('query');
+  });
+
+  it('should generate inline schemas for primitive responses', () => {
+    @Controller('/health')
+    class HealthController {
+      @Get('/')
+      @ApiResponse({ status: 200, type: String })
+      check() {}
+    }
+
+    const document = createOpenApiDocument({
+      openapi: '3.0.3',
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [HealthController],
+    });
+
+    const response = document.paths['/health']?.get?.responses?.['200'] as {
+      content?: { 'application/json'?: { schema?: { type?: string; $ref?: string } } };
+    };
+
+    expect(response.content?.['application/json']?.schema).toEqual({
+      type: 'string',
+    });
+    expect(document.components?.schemas?.String).toBeUndefined();
+  });
+
+  it('should keep OpenAPI 3.0 and 3.1 schema caches separate', () => {
+    class CacheDto {
+      @ApiProperty({ type: String, example: 'cached' })
+      name!: string;
+    }
+
+    @Controller('/cache')
+    class CacheController {
+      @Get('/')
+      @ApiResponse({ status: 200, type: CacheDto })
+      getCache() {}
+    }
+
+    const documentV30 = createOpenApiDocument({
+      openapi: '3.0.3',
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [CacheController],
+    });
+
+    const documentV31 = createOpenApiDocument({
+      openapi: '3.1.0',
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [CacheController],
+    });
+
+    const schemaV30 = documentV30.components?.schemas?.CacheDto as {
+      properties?: Record<string, { example?: unknown; examples?: unknown[] }>;
+    };
+    const schemaV31 = documentV31.components?.schemas?.CacheDto as {
+      properties?: Record<string, { example?: unknown; examples?: unknown[] }>;
+    };
+
+    expect(schemaV30.properties?.name).toEqual({
+      type: 'string',
+      example: 'cached',
+    });
+    expect(schemaV31.properties?.name).toEqual({
+      type: 'string',
+      examples: ['cached'],
+    });
+  });
+
+  it('should merge custom component schemas', () => {
+    const document = createOpenApiDocument({
+      openapi: '3.0.3',
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [],
+      components: {
+        schemas: {
+          ErrorResponse: {
+            type: 'object',
+          },
+        },
+      },
+    });
+
+    expect(document.components?.schemas?.ErrorResponse).toEqual({
+      type: 'object',
+    });
+  });
+
+  it('should preserve metadata on DTO reference properties', () => {
+    class ProfileDto {
+      @ApiProperty({ type: String })
+      bio!: string;
+    }
+
+    class UserDto {
+      @ApiProperty({
+        type: ProfileDto,
+        description: 'Nested profile',
+        example: { bio: 'hello' },
+      })
+      profile!: ProfileDto;
+    }
+
+    @Controller('/users')
+    class UserController {
+      @Get('/')
+      @ApiResponse({ status: 200, type: UserDto })
+      getUser() {}
+    }
+
+    const document = createOpenApiDocument({
+      openapi: '3.0.3',
+      title: 'Test API',
+      version: '1.0.0',
+      controllers: [UserController],
+    });
+
+    const schema = document.components?.schemas?.UserDto as {
+      properties?: Record<string, unknown>;
+    };
+
+    expect(schema.properties?.profile).toEqual({
+      allOf: [{ $ref: '#/components/schemas/ProfileDto' }],
+      example: { bio: 'hello' },
+      description: 'Nested profile',
+    });
   });
 });
 
@@ -467,6 +608,28 @@ describe('Authentication Decorators', () => {
       expect(schemes).toHaveLength(1);
       expect(schemes[0]?.type).toBe('apiKey');
       expect(schemes[0]?.in).toBe('header');
+    });
+
+    it('should use the configured API key parameter name in the document', () => {
+      @ApiApiKey('apiKey', { name: 'X-API-Key', in: 'header' })
+      @Controller('/api')
+      class ApiController {
+        @Get('/')
+        getAll() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'Test API',
+        version: '1.0.0',
+        controllers: [ApiController],
+      });
+
+      expect(document.components?.securitySchemes?.apiKey).toEqual({
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+      });
     });
   });
 
@@ -660,5 +823,57 @@ describe('ExpressAdapter', () => {
     const controller = metadataStorage.findController(TestController);
     expect(controller).toBeDefined();
     expect(controller?.basePath).toBe('/test');
+  });
+
+  it('should mount routes when registering a single controller', () => {
+    const calls: unknown[][] = [];
+    const mockApp = { use: (...args: unknown[]) => calls.push(args) };
+
+    @Controller('/test')
+    class TestController {
+      @Get('/')
+      getAll() {
+        return 'success';
+      }
+    }
+
+    const adapter = new ExpressAdapter(mockApp as any);
+    adapter.registerController(TestController);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[0]).toBe('/');
+  });
+
+  it('should return a prefixed router from createRouterFromControllers', () => {
+    @Controller('/test')
+    class TestController {
+      @Get('/')
+      getAll() {
+        return 'success';
+      }
+    }
+
+    const router = createRouterFromControllers([TestController], {
+      prefix: '/api',
+    });
+
+    const stack = (router as any).stack as Array<{ regexp: RegExp }>;
+    expect(stack[0]?.regexp.toString()).toContain('\\/api');
+  });
+
+  it('should not register double-slash routes for root controller paths', () => {
+    @Controller('/')
+    class RootController {
+      @Get('/health')
+      health() {
+        return 'success';
+      }
+    }
+
+    const router = createRouterFromControllers([RootController]);
+    const stack = (router as any).stack as Array<{ route?: { path: string } }>;
+    const routeLayer = stack.find(layer => layer.route);
+
+    expect(routeLayer?.route?.path).toBe('/health');
   });
 });

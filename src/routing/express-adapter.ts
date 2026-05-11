@@ -72,17 +72,22 @@ export class ExpressAdapter {
   private router: Router;
   private options: ExpressAdapterOptions;
   private namedMiddlewares: Map<string, MiddlewareFunction>;
+  private routerMounted = false;
 
   constructor(
     private app: { use: (path: string, router: Router) => void } | Router,
     options: ExpressAdapterOptions = {}
   ) {
+    const defaultControllerFactory: ControllerFactory = (controllerClass) => (
+      new (controllerClass as new () => any)()
+    );
+
     this.options = {
-      controllerFactory: (controllerClass) => new (controllerClass as new () => any)(),
-      globalPrefix: '',
-      globalMiddlewares: [],
-      namedMiddlewares: {},
       ...options,
+      controllerFactory: options.controllerFactory ?? defaultControllerFactory,
+      globalPrefix: options.globalPrefix ?? '',
+      globalMiddlewares: options.globalMiddlewares ?? [],
+      namedMiddlewares: options.namedMiddlewares ?? {},
     };
     
     // Initialize named middlewares registry
@@ -94,6 +99,7 @@ export class ExpressAdapter {
     // Apply global prefix if provided
     if (this.options.globalPrefix) {
       app.use(this.options.globalPrefix, this.router);
+      this.routerMounted = true;
     } else {
       // For Express apps, we need to mount differently
       if ('use' in app && typeof app.use === 'function') {
@@ -155,17 +161,19 @@ export class ExpressAdapter {
     }
   }
 
+  private mountRouterIfNeeded(): void {
+    if (!this.routerMounted && this.options.globalPrefix === '' && 'use' in this.app) {
+      (this.app as any).use('/', this.router);
+      this.routerMounted = true;
+    }
+  }
+
   /**
    * Register multiple controllers
    */
   registerControllers(controllers: Function[]): void {
     for (const controller of controllers) {
       this.registerController(controller);
-    }
-    
-    // Mount the router to the app if not already mounted
-    if (this.options.globalPrefix === '' && 'use' in this.app) {
-      (this.app as any).use('/', this.router);
     }
   }
 
@@ -193,6 +201,8 @@ export class ExpressAdapter {
         controllerMiddlewares
       );
     }
+
+    this.mountRouterIfNeeded();
   }
 
   /**
@@ -239,21 +249,14 @@ export class ExpressAdapter {
    * Build the full path from base path and method path
    */
   private buildPath(basePath: string, methodPath: string): string {
-    // Normalize base path
-    let fullPath = basePath;
-    
-    // Ensure no double slashes
     if (methodPath === '/') {
-      return fullPath || '/';
+      return basePath || '/';
     }
-    
-    if (!methodPath.startsWith('/')) {
-      methodPath = '/' + methodPath;
-    }
-    
-    fullPath = basePath + methodPath;
-    
-    return fullPath;
+
+    const normalizedBasePath = basePath === '/' ? '' : basePath;
+    const normalizedMethodPath = methodPath.startsWith('/') ? methodPath : `/${methodPath}`;
+
+    return normalizedBasePath + normalizedMethodPath || '/';
   }
 
   /**
@@ -365,16 +368,22 @@ export function createRouterFromControllers(
   options: CreateRouterOptions = {}
 ): Router {
   const express = require('express');
-  const app = express();
+  const mountApp = { use: () => {} };
 
-  const adapter = new ExpressAdapter(app, {
-    globalPrefix: options.prefix || '',
+  const adapter = new ExpressAdapter(mountApp, {
     globalMiddlewares: options.middlewares || [],
     controllerFactory: options.controllerFactory,
     namedMiddlewares: options.namedMiddlewares || {},
   });
 
   adapter.registerControllers(controllers);
+  const router = adapter.getRouter();
 
-  return adapter.getRouter();
+  if (options.prefix) {
+    const prefixedRouter = express.Router();
+    prefixedRouter.use(options.prefix, router);
+    return prefixedRouter;
+  }
+
+  return router;
 }
