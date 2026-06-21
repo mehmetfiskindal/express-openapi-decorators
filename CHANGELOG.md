@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-06-21
+
+### Added
+- `@ApiSchema({ name })` decorator — override the schema name used for a DTO in `components.schemas`. Both the `components.schemas` key and any `$ref` references honor the override.
+- `@ApiCallback(name, definition)` and `@ApiCallbacks(definitions)` decorators — declare webhook / callback entries on an operation. The definition is emitted under `operation.callbacks.<name>.<expression>`.
+- `@ApiLink({ from, fromField, routeParam })` decorator — declare that the decorated operation exposes a default getter for a resource. Emits a `links` entry on the first response that has content.
+- `@ApiDefaultGetter(type)` decorator — marker for the inverse side of `@ApiLink`. Mirrors `@nestjs/swagger` for DX parity; no runtime effect on its own.
+- `@ApiResponse({ headers: { ... } })` — response headers are now emitted on the response's `headers` map.
+- `@ApiOperation({ tags: [...] })` — method-level tag override. When provided, the controller's `@ApiTags` are ignored for that operation.
+- New `ApiProperty` options for polymorphism: `oneOf`, `anyOf`, `allOf`, `discriminator`. Each accepts a list of DTO classes (or a discriminator block) and emits the appropriate composition block in the schema.
+- `resolveSchemaName(dtoClass)` — exported helper that returns the effective schema name (override or class name).
+
+### Fixed
+- Circular DTO references (self-references and mutual references) no longer cause stack overflow. The schema generator's `collectNestedDtos` uses a visiting set to terminate recursion, and property references are emitted as `$ref` so no inline expansion happens.
+
 ## [2.2.0] - 2026-06-21
 
 ### Added
@@ -84,4 +99,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.1.1]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.1.1
 [2.1.2]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.1.2
 [2.2.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.2.0
+[2.3.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.3.0
 [0.1.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v0.1.0

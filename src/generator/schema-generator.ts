@@ -60,6 +60,23 @@ function getPrimitiveSchema(type: Function): OpenAPIV3.SchemaObject {
 function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject {
   const schema: OpenAPIV3.SchemaObject = {};
 
+  // Polymorphism (oneOf / anyOf / allOf) — when any composition list is
+  // provided, the type/format/description fields are merged onto the
+  // wrapper schema, but the reference list takes priority.
+  if (metadata.oneOf || metadata.anyOf || metadata.allOf || metadata.discriminator) {
+    const refs = (list: Function[] | undefined) =>
+      (list ?? []).map(
+        (c) =>
+          ({
+            $ref: `#/components/schemas/${resolveSchemaName(c)}`,
+          } as OpenAPIV3.ReferenceObject)
+      );
+    if (metadata.oneOf) schema.oneOf = refs(metadata.oneOf);
+    if (metadata.anyOf) schema.anyOf = refs(metadata.anyOf);
+    if (metadata.allOf) schema.allOf = refs(metadata.allOf);
+    if (metadata.discriminator) schema.discriminator = metadata.discriminator;
+  }
+
   // Handle array type
   if (metadata.isArray && metadata.type) {
     schema.type = 'array';
@@ -70,7 +87,7 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
     } else {
       // It's a DTO, generate reference
       schema.items = {
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3.ReferenceObject;
     }
   } else if (metadata.isArray && !metadata.type) {
@@ -87,7 +104,7 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
     } else {
       // It's a DTO, generate reference
       schema.allOf = [{
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3.ReferenceObject];
     }
   }
@@ -153,6 +170,14 @@ function isPrimitiveType(type: Function): boolean {
 }
 
 
+
+/**
+ * Resolve the schema name for a DTO class. Honors the @ApiSchema
+ * override; otherwise returns the class's runtime name.
+ */
+export function resolveSchemaName(dtoClass: Function): string {
+  return metadataStorage.getSchemaNameFor(dtoClass) ?? dtoClass.name;
+}
 
 /**
  * Generate OpenAPI schema for a DTO class
@@ -275,7 +300,7 @@ export function generateSchemas(): Record<string, OpenAPIV3.SchemaObject> {
   const schemas: Record<string, OpenAPIV3.SchemaObject> = {};
 
   for (const dtoClass of dtoClasses) {
-    schemas[dtoClass.name] = generateSchemaForDto(dtoClass);
+    schemas[resolveSchemaName(dtoClass)] = generateSchemaForDto(dtoClass);
   }
 
   return schemas;
@@ -288,6 +313,21 @@ export function generateSchemas(): Record<string, OpenAPIV3.SchemaObject> {
 function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjectV31 | OpenAPIV3_1.ReferenceObject {
   const schema: SchemaObjectV31 = {};
 
+  // Polymorphism (oneOf / anyOf / allOf) — see V3 variant.
+  if (metadata.oneOf || metadata.anyOf || metadata.allOf || metadata.discriminator) {
+    const refs = (list: Function[] | undefined) =>
+      (list ?? []).map(
+        (c) =>
+          ({
+            $ref: `#/components/schemas/${resolveSchemaName(c)}`,
+          } as OpenAPIV3_1.ReferenceObject)
+      );
+    if (metadata.oneOf) schema.oneOf = refs(metadata.oneOf);
+    if (metadata.anyOf) schema.anyOf = refs(metadata.anyOf);
+    if (metadata.allOf) schema.allOf = refs(metadata.allOf);
+    if (metadata.discriminator) schema.discriminator = metadata.discriminator;
+  }
+
   // Handle array type
   if (metadata.isArray && metadata.type) {
     schema.type = 'array';
@@ -298,7 +338,7 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
     } else {
       // It's a DTO, generate reference
       schema.items = {
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3_1.ReferenceObject;
     }
   } else if (metadata.isArray && !metadata.type) {
@@ -315,7 +355,7 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
     } else {
       // It's a DTO, generate reference
       schema.allOf = [{
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3_1.ReferenceObject];
     }
   }
@@ -436,7 +476,7 @@ export function generateSchemasV31(): Record<string, SchemaObjectV31> {
   const schemas: Record<string, SchemaObjectV31> = {};
 
   for (const dtoClass of dtoClasses) {
-    schemas[dtoClass.name] = generateSchemaForDtoV31(dtoClass);
+    schemas[resolveSchemaName(dtoClass)] = generateSchemaForDtoV31(dtoClass);
   }
 
   return schemas;

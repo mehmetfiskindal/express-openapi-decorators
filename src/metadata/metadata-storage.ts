@@ -17,6 +17,10 @@ import type {
   ApiProducesMetadata,
   ApiExcludeMetadata,
   ApiExtensionMetadata,
+  ApiSchemaMetadata,
+  ApiCallbackMetadata,
+  ApiResponseHeaderMetadata,
+  ApiLinkMetadata,
   MiddlewareMetadata,
   MiddlewareReference,
 } from './metadata-types.js';
@@ -44,6 +48,10 @@ class MetadataStorageImpl {
   readonly excludes: ApiExcludeMetadata[] = [];
   readonly extraModels: Set<Function> = new Set();
   readonly extensions: ApiExtensionMetadata[] = [];
+  readonly schemaNames: ApiSchemaMetadata[] = [];
+  readonly callbacks: ApiCallbackMetadata[] = [];
+  readonly responseHeaders: ApiResponseHeaderMetadata[] = [];
+  readonly links: ApiLinkMetadata[] = [];
   readonly middlewares: MiddlewareMetadata[] = [];
 
   /**
@@ -331,6 +339,88 @@ class MetadataStorageImpl {
   }
 
   /**
+   * Register a schema name override for a DTO class (@ApiSchema).
+   * If multiple are registered, the last one wins.
+   */
+  addSchemaName(metadata: ApiSchemaMetadata): void {
+    const existing = this.schemaNames.findIndex((s) => s.target === metadata.target);
+    if (existing >= 0) {
+      this.schemaNames[existing] = metadata;
+    } else {
+      this.schemaNames.push(metadata);
+    }
+  }
+
+  /**
+   * Returns the override name for a DTO, or `undefined` to keep the
+   * class's `.name`.
+   */
+  getSchemaNameFor(target: Function): string | undefined {
+    return this.schemaNames.find((s) => s.target === target)?.name;
+  }
+
+  /**
+   * Register a callback definition (@ApiCallback / @ApiCallbacks).
+   */
+  addCallback(metadata: ApiCallbackMetadata): void {
+    this.callbacks.push(metadata);
+  }
+
+  /**
+   * Get all callbacks for a method.
+   */
+  getCallbacksForMethod(target: Function, methodName: string): ApiCallbackMetadata[] {
+    return this.callbacks.filter(
+      (c) => c.target === target && c.methodName === methodName
+    );
+  }
+
+  /**
+   * Register response headers (@ApiResponse.options.headers).
+   */
+  addResponseHeaders(metadata: ApiResponseHeaderMetadata): void {
+    // If a previous declaration for the same status exists, merge into it
+    const existing = this.responseHeaders.find(
+      (r) => r.target === metadata.target && r.methodName === metadata.methodName && r.status === metadata.status
+    );
+    if (existing) {
+      existing.headers = { ...existing.headers, ...metadata.headers };
+    } else {
+      this.responseHeaders.push(metadata);
+    }
+  }
+
+  /**
+   * Get response headers for a specific method + status code.
+   */
+  getResponseHeadersForMethod(
+    target: Function,
+    methodName: string,
+    status: number
+  ): Record<string, import('./metadata-types.js').ApiResponseHeaderDefinition> | undefined {
+    const m = this.responseHeaders.find(
+      (r) => r.target === target && r.methodName === methodName && r.status === status
+    );
+    return m?.headers;
+  }
+
+  /**
+   * Register a link definition (@ApiLink).
+   */
+  addLink(metadata: ApiLinkMetadata): void {
+    this.links.push(metadata);
+  }
+
+  /**
+   * Get all links for a specific method.
+   */
+  getLinksForMethod(target: Function, methodName: string): ApiLinkMetadata[] {
+    return this.links.filter(
+      (l) => l.target === target && l.methodName === methodName
+    );
+  }
+
+  /**
    * Add middleware metadata
    */
   addMiddleware(metadata: MiddlewareMetadata): void {
@@ -462,6 +552,10 @@ class MetadataStorageImpl {
     this.excludes.length = 0;
     this.extraModels.clear();
     this.extensions.length = 0;
+    this.schemaNames.length = 0;
+    this.callbacks.length = 0;
+    this.responseHeaders.length = 0;
+    this.links.length = 0;
     this.middlewares.length = 0;
     // Reset schema cache so re-running with the same DTO class reflects
     // any updates to the decorator metadata.

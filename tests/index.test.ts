@@ -40,6 +40,11 @@ const {
   ApiExtension,
   ApiResponseProperty,
   ApiHideProperty,
+  ApiSchema,
+  ApiCallback,
+  ApiCallbacks,
+  ApiLink,
+  ApiDefaultGetter,
   Use,
   Middleware,
   ExpressAdapter,
@@ -2339,6 +2344,411 @@ describe('v2.2.0 New Decorators', () => {
       };
       expect(schema.properties?.password?.writeOnly).toBe(true);
       expect(schema.properties?.oldField?.deprecated).toBe(true);
+    });
+  });
+});
+
+describe('v2.3.0 Advanced OpenAPI', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  describe('@ApiSchema (schema name override)', () => {
+    it('renames a DTO in components.schemas', () => {
+      @ApiSchema({ name: 'User' })
+      class InternalUserDto {
+        @ApiProperty({ type: String })
+        id!: string;
+      }
+
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: InternalUserDto })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+
+      expect(document.components?.schemas?.User).toBeDefined();
+      expect(document.components?.schemas?.InternalUserDto).toBeUndefined();
+    });
+
+    it('uses the override name in $ref as well', () => {
+      @ApiSchema({ name: 'User' })
+      class InternalUserDto {
+        @ApiProperty({ type: String })
+        id!: string;
+      }
+
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: InternalUserDto })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+      const response = document.paths['/u']?.get?.responses?.['200'] as {
+        content?: { 'application/json'?: { schema?: { $ref?: string } } };
+      };
+      // For non-array DTO references, the response uses a direct $ref
+      // (no allOf wrapper) under the schema-generator's non-array branch.
+      const ref = response.content?.['application/json']?.schema?.$ref;
+      expect(ref).toBe('#/components/schemas/User');
+    });
+  });
+
+  describe('Method-level tag override (@ApiOperation.tags)', () => {
+    it('overrides controller-level @ApiTags for a single operation', () => {
+      @ApiTags('users')
+      @Controller('/u')
+      class UC {
+        @ApiOperation({ summary: 'list', tags: ['admin', 'internal'] })
+        @Get('/')
+        list() {}
+
+        @Get('/public')
+        publicList() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+
+      // Override applied
+      expect(document.paths['/u']?.get?.tags).toEqual(['admin', 'internal']);
+      // No override: falls back to controller tags
+      expect(document.paths['/u/public']?.get?.tags).toEqual(['users']);
+    });
+  });
+
+  describe('Response headers (@ApiResponse.options.headers)', () => {
+    it('emits response headers on the response object', () => {
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({
+          status: 200,
+          type: String,
+          headers: {
+            'X-RateLimit-Remaining': {
+              description: 'Remaining requests in window',
+              schema: { type: 'integer' },
+            },
+          },
+        })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+
+      const response = document.paths['/u']?.get?.responses?.['200'] as {
+        headers?: Record<string, { description?: string; schema?: { type?: string } }>;
+      };
+      expect(response.headers).toBeDefined();
+      expect(response.headers?.['X-RateLimit-Remaining']?.description).toBe(
+        'Remaining requests in window'
+      );
+      expect(response.headers?.['X-RateLimit-Remaining']?.schema?.type).toBe('integer');
+    });
+  });
+
+  describe('Polymorphism (oneOf / anyOf / allOf / discriminator)', () => {
+    class Cat {
+      @ApiProperty({ type: String })
+      kind!: string;
+      @ApiProperty({ type: String })
+      meow!: string;
+    }
+    class Dog {
+      @ApiProperty({ type: String })
+      kind!: string;
+      @ApiProperty({ type: String })
+      bark!: string;
+    }
+
+    it('emits oneOf for a polymorphic property', () => {
+      class Pet {
+        @ApiProperty({ oneOf: [Cat, Dog] })
+        pet!: Cat | Dog;
+      }
+
+      @Controller('/p')
+      class PC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: Pet })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [PC],
+      });
+      const schema = document.components?.schemas?.Pet as {
+        properties?: { pet?: { oneOf?: Array<{ $ref: string }> } };
+      };
+      expect(schema.properties?.pet?.oneOf).toHaveLength(2);
+      expect(schema.properties?.pet?.oneOf?.[0]?.$ref).toBe('#/components/schemas/Cat');
+      expect(schema.properties?.pet?.oneOf?.[1]?.$ref).toBe('#/components/schemas/Dog');
+    });
+
+    it('emits anyOf', () => {
+      class Either {
+        @ApiProperty({ anyOf: [Cat, Dog] })
+        animal!: Cat | Dog;
+      }
+
+      @Controller('/e')
+      class EC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: Either })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [EC],
+      });
+      const schema = document.components?.schemas?.Either as {
+        properties?: { animal?: { anyOf?: unknown[] } };
+      };
+      expect(schema.properties?.animal?.anyOf).toHaveLength(2);
+    });
+
+    it('emits discriminator block', () => {
+      class Animal {
+        @ApiProperty({
+          oneOf: [Cat, Dog],
+          discriminator: { propertyName: 'kind' },
+        })
+        subject!: Cat | Dog;
+      }
+
+      @Controller('/a')
+      class AC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: Animal })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [AC],
+      });
+      const schema = document.components?.schemas?.Animal as {
+        properties?: { subject?: { discriminator?: { propertyName: string } } };
+      };
+      expect(schema.properties?.subject?.discriminator?.propertyName).toBe('kind');
+    });
+  });
+
+  describe('Circular DTO reference protection', () => {
+    it('does not stack-overflow on self-referencing DTOs', () => {
+      class NodeDto {
+        @ApiProperty({ type: String })
+        label!: string;
+
+        // Use a forward reference — explicit class name, not the lambda
+        // form, so the decorator picks the type up at class-definition
+        // time even when reflect-metadata is unavailable in tests.
+        @ApiProperty({ type: NodeDto, required: false })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        child?: any;
+      }
+
+      @Controller('/tree')
+      class TC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: NodeDto })
+        list() {}
+      }
+
+      expect(() =>
+        createOpenApiDocument({
+          title: 'A',
+          version: '1',
+          controllers: [TC],
+        })
+      ).not.toThrow();
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [TC],
+      });
+      // NodeDto schema should exist with a reference to itself for child
+      expect(document.components?.schemas?.NodeDto).toBeDefined();
+      const schema = document.components?.schemas?.NodeDto as {
+        properties?: { child?: { allOf?: Array<{ $ref: string }> } };
+      };
+      expect(schema.properties?.child?.allOf?.[0]?.$ref).toBe(
+        '#/components/schemas/NodeDto'
+      );
+    });
+
+    it('handles mutual circular references between two DTOs', () => {
+      class UserDto {
+        @ApiProperty({ type: String })
+        name!: string;
+
+        @ApiProperty({ type: () => PostDto, isArray: true })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        posts: any[] = [];
+      }
+      class PostDto {
+        @ApiProperty({ type: String })
+        title!: string;
+
+        @ApiProperty({ type: () => UserDto })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        author: any;
+      }
+
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: UserDto })
+        list() {}
+      }
+
+      expect(() =>
+        createOpenApiDocument({
+          openapi: '3.0.3',
+          title: 'A',
+          version: '1',
+          controllers: [UC],
+        })
+      ).not.toThrow();
+    });
+  });
+
+  describe('@ApiCallback / @ApiCallbacks', () => {
+    it('emits callbacks block on the operation', () => {
+      @Controller('/orders')
+      class OC {
+        @Post('/')
+        @ApiCallback('onShipped', {
+          '{$request.body#/shippingWebhookUrl}': {
+            post: {
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        })
+        place() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [OC],
+      });
+
+      const op = document.paths['/orders']?.post as {
+        callbacks?: Record<string, Record<string, unknown>>;
+      };
+      expect(op.callbacks).toBeDefined();
+      expect(op.callbacks?.onShipped).toBeDefined();
+      expect(
+        op.callbacks?.onShipped?.['{$request.body#/shippingWebhookUrl}']
+      ).toBeDefined();
+    });
+
+    it('ApiCallbacks shorthand registers multiple named callbacks', () => {
+      @Controller('/o')
+      class OC {
+        @Post('/')
+        @ApiCallbacks({
+          onA: { '{$request.body#/a}': { post: {} } },
+          onB: { '{$request.body#/b}': { post: {} } },
+        })
+        place() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [OC],
+      });
+
+      const op = document.paths['/o']?.post as {
+        callbacks?: Record<string, unknown>;
+      };
+      expect(op.callbacks).toHaveProperty('onA');
+      expect(op.callbacks).toHaveProperty('onB');
+    });
+  });
+
+  describe('@ApiLink / @ApiDefaultGetter', () => {
+    it('emits links on the response pointing to the source operation', () => {
+      class UserDto {
+        @ApiProperty({ type: String })
+        id!: string;
+      }
+      @Controller('/users')
+      class UC {
+        @Get(':id')
+        @ApiResponse({ status: 200, type: UserDto })
+        @ApiLink({ from: UserDto, fromField: 'id', routeParam: 'id' })
+        getOne() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+
+      const response = document.paths['/users/{id}']?.get?.responses?.['200'] as {
+        links?: Record<string, { operationId?: string; parameters?: Record<string, string> }>;
+      };
+      expect(response.links).toBeDefined();
+      const link = response.links?.UserDto;
+      expect(link?.operationId).toBe('UserDto_id');
+      expect(link?.parameters?.id).toBe('$response.body#/id');
+    });
+
+    it('@ApiDefaultGetter registers without breaking', () => {
+      @Controller('/u')
+      class UC {
+        @ApiDefaultGetter(class { id!: string })
+        @Get(':id')
+        get() {}
+      }
+
+      expect(() =>
+        createOpenApiDocument({
+          title: 'A',
+          version: '1',
+          controllers: [UC],
+        })
+      ).not.toThrow();
     });
   });
 });

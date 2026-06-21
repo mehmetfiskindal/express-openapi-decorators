@@ -78,6 +78,33 @@ export interface ApiPropertyOptions {
    * @default false
    */
   hidden?: boolean;
+
+  /**
+   * Polymorphism: list of DTO classes to be combined with `oneOf` in
+   * the generated schema. The resulting schema accepts any of the
+   * provided types. The `@ApiProperty.type` field is ignored when this
+   * is provided.
+   */
+  oneOf?: Function[];
+
+  /**
+   * Polymorphism: list of DTO classes to be combined with `anyOf` in
+   * the generated schema.
+   */
+  anyOf?: Function[];
+
+  /**
+   * Polymorphism: list of DTO classes to be combined with `allOf` in
+   * the generated schema. Useful for mixin / interface composition.
+   */
+  allOf?: Function[];
+
+  /**
+   * Polymorphism: discriminator configuration. When set, the schema
+   * is generated with the `discriminator` block (e.g. `{ propertyName:
+   * 'kind', mapping: { Cat: '#/components/schemas/Cat' } }`).
+   */
+  discriminator?: { propertyName: string; mapping?: Record<string, string> };
 }
 
 /**
@@ -199,6 +226,10 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
       writeOnly: options.writeOnly ?? false,
       deprecated: options.deprecated ?? false,
       hidden: options.hidden ?? false,
+      oneOf: options.oneOf,
+      anyOf: options.anyOf,
+      allOf: options.allOf,
+      discriminator: options.discriminator,
     };
 
     metadataStorage.addProperty(metadata);

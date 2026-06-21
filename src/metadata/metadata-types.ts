@@ -48,6 +48,7 @@ export interface ApiOperationMetadata {
   description: string | undefined;
   operationId: string | undefined;
   deprecated: boolean;
+  tags: string[] | undefined;
 }
 
 /**
@@ -144,6 +145,10 @@ export interface ApiPropertyMetadata {
   writeOnly: boolean;
   deprecated: boolean;
   hidden: boolean;
+  oneOf: Function[] | undefined;
+  anyOf: Function[] | undefined;
+  allOf: Function[] | undefined;
+  discriminator: { propertyName: string; mapping?: Record<string, string> } | undefined;
 }
 
 /**
@@ -244,13 +249,65 @@ export interface ApiExcludeMetadata {
 }
 
 /**
- * Metadata for @ApiExtension — a single OpenAPI "x-*" extension entry.
+ * Metadata for OpenAPI "x-*" extension (@ApiExtension)
  */
 export interface ApiExtensionMetadata {
   target: Function;
   methodName?: string; // undefined for controller-level
   key: string;
   value: unknown;
+}
+
+/**
+ * Metadata for @ApiSchema — override the schema name used in
+ * `components.schemas` for a DTO class.
+ */
+export interface ApiSchemaMetadata {
+  target: Function;
+  name: string;
+}
+
+/**
+ * Metadata for @ApiCallback / @ApiCallbacks
+ * Stores the named callback path-item objects that are attached to an
+ * operation's `callbacks` field.
+ */
+export interface ApiCallbackMetadata {
+  target: Function;
+  methodName: string;
+  name: string;
+  expression: string; // e.g. '{$request.query.url}'
+  pathItem: Record<string, unknown>; // path-item-like shape
+}
+
+/**
+ * Metadata for response headers on @ApiResponse
+ * Maps a header name to its header object (description/schema/etc).
+ */
+export interface ApiResponseHeaderMetadata {
+  target: Function;
+  methodName: string;
+  status: number;
+  headers: Record<string, ApiResponseHeaderDefinition>;
+}
+
+export interface ApiResponseHeaderDefinition {
+  description?: string;
+  required?: boolean;
+  schema?: { type?: string; format?: string; [k: string]: unknown };
+}
+
+/**
+ * Metadata for @ApiLink
+ * Reference to a target DTO whose `fromField` is the id used to
+ * construct a link into the decorated operation.
+ */
+export interface ApiLinkMetadata {
+  target: Function;
+  methodName: string;
+  fromType: Function;
+  fromField: string;
+  routeParam: string;
 }
 
 /**

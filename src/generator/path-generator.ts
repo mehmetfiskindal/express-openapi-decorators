@@ -1,6 +1,7 @@
 import type { OpenAPIV3, OpenAPIV3_1 } from '../types/openapi.types.js';
 import { metadataStorage } from '../metadata/metadata-storage.js';
 import type { MethodMetadata, HttpMethod } from '../metadata/metadata-types.js';
+import { resolveSchemaName } from './schema-generator.js';
 
 
 // Type aliases for both versions
@@ -81,7 +82,7 @@ function schemaForType(type: Function): OpenAPIV3.SchemaObject | OpenAPIV3.Refer
   }
 
   return {
-    $ref: `#/components/schemas/${type.name}`,
+    $ref: `#/components/schemas/${resolveSchemaName(type)}`,
   };
 }
 
@@ -93,7 +94,7 @@ function schemaForTypeV31(type: Function): OpenAPIV3_1.SchemaObject | OpenAPIV3_
   }
 
   return {
-    $ref: `#/components/schemas/${type.name}`,
+    $ref: `#/components/schemas/${resolveSchemaName(type)}`,
   };
 }
 
@@ -368,6 +369,40 @@ function generateResponses(target: Function, methodName: string): OpenAPIV3.Resp
       response.content = content;
     }
 
+    // Attach response headers (@ApiResponse.options.headers)
+    const headers = metadataStorage.getResponseHeadersForMethod(
+      target,
+      methodName,
+      responseMeta.status
+    );
+    if (headers && Object.keys(headers).length > 0) {
+      const headerMap: Record<string, OpenAPIV3.HeaderObject> = {};
+      for (const [name, def] of Object.entries(headers)) {
+        const h: OpenAPIV3.HeaderObject = {};
+        if (def.description !== undefined) h.description = def.description;
+        if (def.required !== undefined) h.required = def.required;
+        if (def.schema !== undefined) h.schema = def.schema as OpenAPIV3.SchemaObject;
+        headerMap[name] = h;
+      }
+      response.headers = headerMap;
+    }
+
+    // Attach @ApiLink definitions to the first response that has content
+    const links = metadataStorage.getLinksForMethod(target, methodName);
+    if (links.length > 0 && !response.links) {
+      const linkMap: Record<string, OpenAPIV3.LinkObject> = {};
+      for (const link of links) {
+        const linkObj: OpenAPIV3.LinkObject = {
+          operationId: `${link.fromType.name}_${link.fromField}`,
+          parameters: {
+            [link.routeParam]: `$response.body#/${link.fromField}`,
+          },
+        };
+        linkMap[link.fromType.name] = linkObj;
+      }
+      response.links = linkMap;
+    }
+
     responses[responseMeta.status.toString()] = response;
   }
 
@@ -456,17 +491,22 @@ function generateOperation(
     operationId: `${controller.name}_${method.methodName}`,
   };
 
-  // Add tags from controller
-  const tags = metadataStorage.getTagsForController(controller);
-  if (tags.length > 0) {
-    operation.tags = tags;
-  }
-
-  // Add operation metadata
-  const operationMeta = metadataStorage.getOperationForMethod(
+  // Add tags from controller (unless overridden at method level)
+  const operationMetaForTags = metadataStorage.getOperationForMethod(
     method.controllerTarget,
     method.methodName
   );
+  if (operationMetaForTags?.tags !== undefined) {
+    operation.tags = operationMetaForTags.tags;
+  } else {
+    const tags = metadataStorage.getTagsForController(controller);
+    if (tags.length > 0) {
+      operation.tags = tags;
+    }
+  }
+
+  // Add operation metadata
+  const operationMeta = operationMetaForTags;
 
   if (operationMeta) {
     operation.summary = operationMeta.summary;
@@ -525,6 +565,25 @@ function generateOperation(
   );
   for (const [key, value] of Object.entries(extensions)) {
     (operation as Record<string, unknown>)[key] = value;
+  }
+
+  // Attach @ApiCallback / @ApiCallbacks definitions
+  const callbacks = metadataStorage.getCallbacksForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  if (callbacks.length > 0) {
+    const callbackMap: Record<string, Record<string, unknown>> = {};
+    for (const c of callbacks) {
+      const inner = callbackMap[c.name] ?? {};
+      inner[c.expression] = c.pathItem;
+      callbackMap[c.name] = inner;
+    }
+    // The OpenAPI type expects each path item to be a CallbackObject
+    // (which mirrors PathItemObject); we treat developer-supplied
+    // definitions as loosely typed paths and rely on the runtime
+    // shape being correct.
+    (operation as Record<string, unknown>).callbacks = callbackMap;
   }
 
   return operation as OpenAPIV3.OperationObject;
@@ -840,6 +899,40 @@ function generateResponsesV31(target: Function, methodName: string): OpenAPIV3_1
       response.content = content;
     }
 
+    // Attach response headers
+    const headers = metadataStorage.getResponseHeadersForMethod(
+      target,
+      methodName,
+      responseMeta.status
+    );
+    if (headers && Object.keys(headers).length > 0) {
+      const headerMap: Record<string, OpenAPIV3_1.HeaderObject> = {};
+      for (const [name, def] of Object.entries(headers)) {
+        const h: OpenAPIV3_1.HeaderObject = {};
+        if (def.description !== undefined) h.description = def.description;
+        if (def.required !== undefined) h.required = def.required;
+        if (def.schema !== undefined) h.schema = def.schema as OpenAPIV3_1.SchemaObject;
+        headerMap[name] = h;
+      }
+      response.headers = headerMap;
+    }
+
+    // Attach @ApiLink definitions
+    const links = metadataStorage.getLinksForMethod(target, methodName);
+    if (links.length > 0 && !response.links) {
+      const linkMap: Record<string, OpenAPIV3_1.LinkObject> = {};
+      for (const link of links) {
+        const linkObj: OpenAPIV3_1.LinkObject = {
+          operationId: `${link.fromType.name}_${link.fromField}`,
+          parameters: {
+            [link.routeParam]: `$response.body#/${link.fromField}`,
+          },
+        };
+        linkMap[link.fromType.name] = linkObj;
+      }
+      response.links = linkMap;
+    }
+
     responses[responseMeta.status.toString()] = response;
   }
 
@@ -910,17 +1003,22 @@ function generateOperationV31(
     operationId: `${controller.name}_${method.methodName}`,
   };
 
-  // Add tags from controller
-  const tags = metadataStorage.getTagsForController(controller);
-  if (tags.length > 0) {
-    operation.tags = tags;
-  }
-
-  // Add operation metadata
-  const operationMeta = metadataStorage.getOperationForMethod(
+  // Add tags from controller (unless overridden at method level)
+  const operationMetaForTags = metadataStorage.getOperationForMethod(
     method.controllerTarget,
     method.methodName
   );
+  if (operationMetaForTags?.tags !== undefined) {
+    operation.tags = operationMetaForTags.tags;
+  } else {
+    const tags = metadataStorage.getTagsForController(controller);
+    if (tags.length > 0) {
+      operation.tags = tags;
+    }
+  }
+
+  // Add operation metadata
+  const operationMeta = operationMetaForTags;
 
   if (operationMeta) {
     operation.summary = operationMeta.summary;
@@ -978,6 +1076,21 @@ function generateOperationV31(
   );
   for (const [key, value] of Object.entries(extensions)) {
     (operation as Record<string, unknown>)[key] = value;
+  }
+
+  // Attach @ApiCallback / @ApiCallbacks definitions
+  const callbacks = metadataStorage.getCallbacksForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  if (callbacks.length > 0) {
+    const callbackMap: Record<string, Record<string, unknown>> = {};
+    for (const c of callbacks) {
+      const inner = callbackMap[c.name] ?? {};
+      inner[c.expression] = c.pathItem;
+      callbackMap[c.name] = inner;
+    }
+    (operation as Record<string, unknown>).callbacks = callbackMap;
   }
 
   return operation as OperationObjectV31;

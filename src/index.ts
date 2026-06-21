@@ -20,6 +20,11 @@ export type {
   ApiProducesMetadata,
   ApiExcludeMetadata,
   ApiExtensionMetadata,
+  ApiSchemaMetadata,
+  ApiCallbackMetadata,
+  ApiResponseHeaderMetadata,
+  ApiResponseHeaderDefinition,
+  ApiLinkMetadata,
   MiddlewareMetadata,
   MiddlewareFunction,
   MiddlewareReference,
@@ -104,6 +109,17 @@ export {
 
 // Decorators - Extra models
 export { ApiExtraModels } from './decorators/api-extra-models.decorator.js';
+
+// Decorators - Schema override
+export { ApiSchema } from './decorators/api-schema.decorator.js';
+
+// Decorators - Callbacks
+export { ApiCallback, ApiCallbacks } from './decorators/api-callback.decorator.js';
+export type { ApiCallbackDefinition } from './decorators/api-callback.decorator.js';
+
+// Decorators - Links
+export { ApiLink, ApiDefaultGetter } from './decorators/api-link.decorator.js';
+export type { ApiLinkOptions } from './decorators/api-link.decorator.js';
 
 // Decorators - Middleware
 export { Use, Middleware } from './decorators/middleware.decorator.js';

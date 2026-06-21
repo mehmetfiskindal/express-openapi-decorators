@@ -342,9 +342,9 @@ app.listen(3000, () => {
 
 | Decorator | Description |
 |-----------|-------------|
-| `@ApiOperation(options)` | Adds operation metadata (summary, description, operationId, deprecated) |
+| `@ApiOperation(options)` | Adds operation metadata (summary, description, operationId, deprecated, tags) |
 | `@ApiResponse(status, type)` | Shorthand for response with type |
-| `@ApiResponse(options)` | Detailed response configuration |
+| `@ApiResponse(options)` | Detailed response configuration (supports `headers`) |
 | `@ApiBody(DtoClass)` | Shorthand for request body |
 | `@ApiBody(options)` | Detailed request body configuration |
 | `@ApiQuery(options)` | Adds a query parameter |
@@ -357,15 +357,20 @@ app.listen(3000, () => {
 | `@ApiFiles(options)` | Marks the endpoint as accepting multiple file uploads |
 | `@ApiExcludeEndpoint()` | Excludes a single endpoint from the OpenAPI document |
 | `@ApiExtension(key, value)` | Attaches an OpenAPI `x-*` extension to the operation |
+| `@ApiCallback(name, definition)` | Declares a webhook / callback on the operation |
+| `@ApiCallbacks(definitions)` | Declares multiple named callbacks on the operation |
+| `@ApiLink({ from, fromField, routeParam })` | Declares the operation as a default getter for a linked resource |
+| `@ApiDefaultGetter(type)` | Marker for the inverse side of `@ApiLink` |
 
 ### DTO Decorators
 
 | Decorator | Description |
 |-----------|-------------|
-| `@ApiProperty(options)` | Defines a property in a DTO |
+| `@ApiProperty(options)` | Defines a property in a DTO (supports `oneOf` / `anyOf` / `allOf` / `discriminator` for polymorphism) |
 | `@ApiPropertyOptional(options)` | Defines an optional property (shorthand) |
 | `@ApiResponseProperty(options)` | Defines a read-only response-only property |
 | `@ApiHideProperty()` | Excludes a property from the DTO schema |
+| `@ApiSchema({ name })` | Overrides the schema name used in `components.schemas` and `$ref` |
 
 ### Security Decorators
 
@@ -524,7 +529,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Roadmap
 
-### Completed in 2.2.0
+### Completed in 2.3.0
 - [x] Core decorator system
 - [x] DTO schema generation
 - [x] Query, path, and header parameters
@@ -539,13 +544,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] `@ApiResponseProperty` / `@ApiHideProperty`
 - [x] `@ApiProduces` (response content types)
 - [x] `@ApiHeader` / `@ApiHeaders`
+- [x] `@ApiSchema` (schema name override)
+- [x] `@ApiCallback` / `@ApiCallbacks` (webhooks)
+- [x] `@ApiLink` / `@ApiDefaultGetter` (link objects)
+- [x] Polymorphism: `oneOf` / `anyOf` / `allOf` / `discriminator` on `@ApiProperty`
+- [x] Circular DTO reference protection
+- [x] Response headers on `@ApiResponse`
+- [x] Method-level tag override on `@ApiOperation`
 
 ### Planned for upcoming releases
-- [ ] `@ApiCallback` / `@ApiCallbacks` (webhooks)
-- [ ] `@ApiLink` and `@ApiDefaultGetter` (link objects)
-- [ ] Polymorphism helpers (`discriminator`, `oneOf`, `anyOf`)
-- [ ] Circular DTO reference protection
-- [ ] Response headers and `links` on `@ApiResponse`
 - [ ] CLI: `npx express-openapi-decorators generate`
 - [ ] Auto controller discovery via glob
 - [ ] Swagger UI route helper
