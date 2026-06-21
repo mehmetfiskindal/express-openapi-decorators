@@ -117,6 +117,17 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
     schema.description = metadata.description;
   }
 
+  // OpenAPI 3.0 boolean flags
+  if (metadata.readOnly) {
+    schema.readOnly = true;
+  }
+  if (metadata.writeOnly) {
+    schema.writeOnly = true;
+  }
+  if (metadata.deprecated) {
+    schema.deprecated = true;
+  }
+
   // Merge class-validator constraints if available
   if (isClassValidatorAvailable()) {
     const validationConstraints = extractValidationConstraints(
@@ -163,6 +174,9 @@ export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject
   const required: string[] = [];
 
   for (const property of properties) {
+    // @ApiHideProperty() — drop the property entirely
+    if (property.hidden) continue;
+
     // Add property to schema
     if (schema.properties) {
       schema.properties[property.propertyKey] = propertyMetadataToSchema(property);
@@ -253,6 +267,11 @@ export function collectDtoClasses(): Set<Function> {
  */
 export function generateSchemas(): Record<string, OpenAPIV3.SchemaObject> {
   const dtoClasses = collectDtoClasses();
+  // Extra models registered via @ApiExtraModels — included even when
+  // nothing references them directly.
+  for (const m of metadataStorage.getExtraModels()) {
+    dtoClasses.add(m);
+  }
   const schemas: Record<string, OpenAPIV3.SchemaObject> = {};
 
   for (const dtoClass of dtoClasses) {
@@ -326,6 +345,17 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
     schema.description = metadata.description;
   }
 
+  // OpenAPI 3.1 boolean flags
+  if (metadata.readOnly) {
+    schema.readOnly = true;
+  }
+  if (metadata.writeOnly) {
+    schema.writeOnly = true;
+  }
+  if (metadata.deprecated) {
+    schema.deprecated = true;
+  }
+
   // Merge class-validator constraints if available
   if (isClassValidatorAvailable()) {
     const validationConstraints = extractValidationConstraintsV31(
@@ -371,6 +401,9 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
   const required: string[] = [];
 
   for (const property of properties) {
+    // @ApiHideProperty() — drop the property entirely
+    if (property.hidden) continue;
+
     // Add property to schema
     if (schema.properties) {
       schema.properties[property.propertyKey] = propertyMetadataToSchemaV31(property);
@@ -397,6 +430,9 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
  */
 export function generateSchemasV31(): Record<string, SchemaObjectV31> {
   const dtoClasses = collectDtoClasses();
+  for (const m of metadataStorage.getExtraModels()) {
+    dtoClasses.add(m);
+  }
   const schemas: Record<string, SchemaObjectV31> = {};
 
   for (const dtoClass of dtoClasses) {

@@ -322,6 +322,11 @@ app.listen(3000, () => {
 |-----------|-------------|
 | `@Controller(path)` | Marks a class as an API controller with a base path |
 | `@ApiTags(...tags)` | Adds OpenAPI tags to all endpoints in the controller |
+| `@ApiExcludeController()` | Excludes every endpoint of the controller from the generated OpenAPI document |
+| `@ApiExtraModels(...models)` | Registers DTO classes to appear in `components.schemas` even when not directly referenced |
+| `@ApiHeader(options)` | Controller-level request header parameter |
+| `@ApiHeaders([...])` | Controller-level shorthand for multiple headers |
+| `@ApiExtension(key, value)` | Controller-level OpenAPI `x-*` extension |
 
 ### HTTP Method Decorators
 
@@ -337,13 +342,21 @@ app.listen(3000, () => {
 
 | Decorator | Description |
 |-----------|-------------|
-| `@ApiOperation(options)` | Adds operation metadata (summary, description) |
+| `@ApiOperation(options)` | Adds operation metadata (summary, description, operationId, deprecated) |
 | `@ApiResponse(status, type)` | Shorthand for response with type |
 | `@ApiResponse(options)` | Detailed response configuration |
 | `@ApiBody(DtoClass)` | Shorthand for request body |
 | `@ApiBody(options)` | Detailed request body configuration |
 | `@ApiQuery(options)` | Adds a query parameter |
 | `@ApiParam(options)` | Adds a path parameter |
+| `@ApiHeader(options)` | Adds a request header parameter |
+| `@ApiHeaders([...])` | Adds multiple request header parameters at once |
+| `@ApiConsumes(...types)` | Declares request content types |
+| `@ApiProduces(...types)` | Declares response content types |
+| `@ApiFile(options)` | Marks the endpoint as accepting a single file upload |
+| `@ApiFiles(options)` | Marks the endpoint as accepting multiple file uploads |
+| `@ApiExcludeEndpoint()` | Excludes a single endpoint from the OpenAPI document |
+| `@ApiExtension(key, value)` | Attaches an OpenAPI `x-*` extension to the operation |
 
 ### DTO Decorators
 
@@ -351,6 +364,21 @@ app.listen(3000, () => {
 |-----------|-------------|
 | `@ApiProperty(options)` | Defines a property in a DTO |
 | `@ApiPropertyOptional(options)` | Defines an optional property (shorthand) |
+| `@ApiResponseProperty(options)` | Defines a read-only response-only property |
+| `@ApiHideProperty()` | Excludes a property from the DTO schema |
+
+### Security Decorators
+
+| Decorator | Description |
+|-----------|-------------|
+| `@ApiBearerAuth(name?, options?)` | Registers a Bearer / JWT security scheme |
+| `@ApiBasicAuth(name?, description?)` | Registers a Basic auth security scheme |
+| `@ApiApiKey(name, options)` | Registers an API key (query / header / cookie) security scheme |
+| `@ApiCookieAuth(name?, options?)` | Registers a cookie-based security scheme (sugar over `ApiApiKey({ in: 'cookie' })`) |
+| `@ApiOAuth2(name?, options)` | Registers an OAuth 2.0 security scheme |
+| `@ApiOpenIdConnect(name?, options)` | Registers an OpenID Connect security scheme |
+| `@ApiSecurity(...names)` | References one or more already-registered security schemes |
+| `@Public()` | Marks a route as having no security requirements |
 
 ## @ApiProperty Options
 
@@ -496,11 +524,28 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Roadmap
 
+### Completed in 2.2.0
 - [x] Core decorator system
 - [x] DTO schema generation
-- [x] Query and path parameters
-- [x] Authentication decorators (@ApiBearerAuth)
-- [x] File upload support
-- [x] Validation integration (class-validator, zod)
-- [x] Route registration helper
-- [x] OpenAPI 3.1.0 support
+- [x] Query, path, and header parameters
+- [x] Authentication decorators (`@ApiBearerAuth`, `@ApiBasicAuth`, `@ApiApiKey`, `@ApiCookieAuth`, `@ApiOAuth2`, `@ApiOpenIdConnect`)
+- [x] File upload support (`@ApiFile`, `@ApiFiles`, `@ApiFormData`)
+- [x] Validation integration (class-validator)
+- [x] Route registration helper (`ExpressAdapter`, `createRouterFromControllers`)
+- [x] OpenAPI 3.0.3 and 3.1.0 support
+- [x] `@ApiExcludeEndpoint` / `@ApiExcludeController`
+- [x] `@ApiExtraModels`
+- [x] `@ApiExtension` (`x-*` fields)
+- [x] `@ApiResponseProperty` / `@ApiHideProperty`
+- [x] `@ApiProduces` (response content types)
+- [x] `@ApiHeader` / `@ApiHeaders`
+
+### Planned for upcoming releases
+- [ ] `@ApiCallback` / `@ApiCallbacks` (webhooks)
+- [ ] `@ApiLink` and `@ApiDefaultGetter` (link objects)
+- [ ] Polymorphism helpers (`discriminator`, `oneOf`, `anyOf`)
+- [ ] Circular DTO reference protection
+- [ ] Response headers and `links` on `@ApiResponse`
+- [ ] CLI: `npx express-openapi-decorators generate`
+- [ ] Auto controller discovery via glob
+- [ ] Swagger UI route helper

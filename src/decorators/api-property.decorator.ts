@@ -49,6 +49,35 @@ export interface ApiPropertyOptions {
    * Automatically set to true if type is an array
    */
   isArray?: boolean;
+
+  /**
+   * Mark the property as read-only. Useful for response-only DTOs
+   * where the value is server-generated and should not be accepted
+   * as input on a request body.
+   * @default false
+   */
+  readOnly?: boolean;
+
+  /**
+   * Mark the property as write-only. Useful for properties that
+   * are accepted on requests but never returned in responses
+   * (e.g. password fields).
+   * @default false
+   */
+  writeOnly?: boolean;
+
+  /**
+   * Mark the property as deprecated.
+   * @default false
+   */
+  deprecated?: boolean;
+
+  /**
+   * Hide the property from the generated OpenAPI schema entirely.
+   * Useful for internal fields that should not appear in the public API.
+   * @default false
+   */
+  hidden?: boolean;
 }
 
 /**
@@ -166,6 +195,10 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
       format: options.format,
       default: options.default,
       isArray,
+      readOnly: options.readOnly ?? false,
+      writeOnly: options.writeOnly ?? false,
+      deprecated: options.deprecated ?? false,
+      hidden: options.hidden ?? false,
     };
 
     metadataStorage.addProperty(metadata);
@@ -174,15 +207,15 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
 
 /**
  * @ApiPropertyOptional decorator - marks a property as optional
- * 
+ *
  * Shorthand for @ApiProperty({ required: false, ...options })
- * 
+ *
  * @example
  * ```typescript
  * export class UserDto {
  *   @ApiProperty()
  *   id: string;
- * 
+ *
  *   @ApiPropertyOptional({ type: String })
  *   nickname?: string;
  * }
@@ -193,4 +226,50 @@ export function ApiPropertyOptional(options: Omit<ApiPropertyOptions, 'required'
     ...options,
     required: false,
   });
+}
+
+/**
+ * @ApiResponseProperty decorator - marks a property as read-only,
+ * intended to appear in responses but not in request bodies.
+ *
+ * Shorthand for @ApiProperty({ readOnly: true, ...options })
+ *
+ * @example
+ * ```typescript
+ * export class UserDto {
+ *   @ApiResponseProperty()
+ *   id!: string;
+ *
+ *   @ApiResponseProperty({ type: String, format: 'date-time' })
+ *   createdAt!: string;
+ * }
+ * ```
+ */
+export function ApiResponseProperty(
+  options: Omit<ApiPropertyOptions, 'readOnly' | 'hidden' | 'writeOnly' | 'deprecated' | 'required'> = {}
+): PropertyDecorator {
+  return ApiProperty({
+    ...options,
+    readOnly: true,
+  } as ApiPropertyOptions);
+}
+
+/**
+ * @ApiHideProperty decorator - marks a property to be excluded from
+ * the generated OpenAPI schema. The runtime value is still available
+ * on instances, but it will not appear in `components.schemas`.
+ *
+ * @example
+ * ```typescript
+ * export class UserDto {
+ *   @ApiProperty()
+ *   id!: string;
+ *
+ *   @ApiHideProperty()
+ *   passwordHash!: string; // not exposed in OpenAPI document
+ * }
+ * ```
+ */
+export function ApiHideProperty(): PropertyDecorator {
+  return ApiProperty({ hidden: true } as ApiPropertyOptions);
 }

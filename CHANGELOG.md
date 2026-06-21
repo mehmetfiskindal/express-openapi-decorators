@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-06-21
+
+### Added
+- `@ApiHeader` and `@ApiHeaders` decorators — declare HTTP header parameters on a method or controller. Mirrors `@ApiQuery` but with `in: 'header'`.
+- `@ApiCookieAuth` decorator — registers an `apiKey` security scheme with `in: 'cookie'` and applies it to a route or controller. Re-exported as a NestJS-compatible alias.
+- `@ApiProduces(...mimeTypes)` decorator — declares the response content types produced by an endpoint. Defaults to `application/json` when omitted.
+- `@ApiExcludeEndpoint()` and `@ApiExcludeController()` decorators — omit an endpoint or an entire controller from the generated OpenAPI document without affecting runtime routing.
+- `@ApiExtraModels(...models)` decorator — register DTO classes so they appear in `components.schemas` even when no operation references them directly (useful for shared error envelopes, polymorphic types, SDK code-gen).
+- `@ApiExtension(key, value)` decorator — attach OpenAPI `x-*` extension fields to operations. Throws at runtime when the key is not `x-`-prefixed.
+- `@ApiResponseProperty(options)` decorator — shorthand for `@ApiProperty({ readOnly: true })` for response-only fields.
+- `@ApiHideProperty()` decorator — exclude a property from the generated DTO schema.
+- New `ApiProperty` options: `readOnly`, `writeOnly`, `deprecated`, `hidden`.
+- New metadata types exported: `ApiHeaderMetadata`, `ApiProducesMetadata`, `ApiExcludeMetadata`, `ApiExtensionMetadata`.
+
+### Fixed
+- `@ApiHeader` and `@ApiHeaders` (the latter being new) correctly emit `in: 'header'` parameters and surface `format` / `enum` / `default` / `deprecated` along with the existing `description` / `example`.
+- Path and query parameter helpers (`buildPrimitiveParameterSchema` and its V3.1 variant) are now shared with header generation to keep schema shape consistent.
+
 ## [2.1.2] - 2026-06-21
 
 ### Fixed
@@ -65,4 +83,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [2.1.1]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.1.1
 [2.1.2]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.1.2
+[2.2.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.2.0
 [0.1.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v0.1.0

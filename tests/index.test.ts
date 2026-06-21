@@ -30,6 +30,16 @@ const {
   ApiFiles,
   ApiConsumes,
   ApiFormData,
+  ApiProduces,
+  ApiHeader,
+  ApiHeaders,
+  ApiCookieAuth,
+  ApiExcludeEndpoint,
+  ApiExcludeController,
+  ApiExtraModels,
+  ApiExtension,
+  ApiResponseProperty,
+  ApiHideProperty,
   Use,
   Middleware,
   ExpressAdapter,
@@ -1915,5 +1925,420 @@ describe('Validation adapter exports', () => {
       'nope'
     );
     expect(merged.type).toBe('string');
+  });
+});
+
+describe('v2.2.0 New Decorators', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  describe('@ApiHeader / @ApiHeaders', () => {
+    it('registers a method-level header parameter', () => {
+      @Controller('/u')
+      class UC {
+        @ApiHeader({ name: 'X-Tenant', required: true })
+        @Get('/')
+        list() {}
+      }
+
+      const headers = metadataStorage.getHeaderParamsForMethod(UC, 'list');
+      expect(headers).toHaveLength(1);
+      expect(headers[0]?.name).toBe('X-Tenant');
+      expect(headers[0]?.required).toBe(true);
+    });
+
+    it('registers a controller-level header parameter', () => {
+      @ApiHeader({ name: 'X-Tenant', required: true })
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        list() {}
+      }
+
+      const headers = metadataStorage.getHeaderParamsForController(UC);
+      expect(headers).toHaveLength(1);
+      expect(headers[0]?.methodName).toBeUndefined();
+    });
+
+    it('emits header parameter in generated document (V3.1)', () => {
+      @ApiHeader({ name: 'X-Request-Id', description: 'Correlation id' })
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+
+      const params = document.paths['/u']?.get?.parameters as Array<{
+        name: string;
+        in: string;
+      }>;
+      const header = params.find((p) => p.name === 'X-Request-Id');
+      expect(header).toBeDefined();
+      expect(header?.in).toBe('header');
+    });
+
+    it('ApiHeaders shorthand registers multiple headers', () => {
+      @Controller('/u')
+      class UC {
+        @ApiHeaders([
+          { name: 'X-A' },
+          { name: 'X-B', required: true },
+        ])
+        @Get('/')
+        list() {}
+      }
+
+      const headers = metadataStorage.getHeaderParamsForMethod(UC, 'list');
+      expect(headers).toHaveLength(2);
+      expect(headers.map((h) => h.name).sort()).toEqual(['X-A', 'X-B']);
+    });
+  });
+
+  describe('@ApiCookieAuth', () => {
+    it('registers an apiKey cookie security scheme', () => {
+      @ApiCookieAuth('session', { name: 'connect.sid', description: 'Express session' })
+      @Controller('/p')
+      class PC {}
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [PC],
+      });
+
+      const scheme = document.components?.securitySchemes?.session as {
+        type: string;
+        in: string;
+        name: string;
+        description?: string;
+      };
+      expect(scheme.type).toBe('apiKey');
+      expect(scheme.in).toBe('cookie');
+      expect(scheme.name).toBe('connect.sid');
+      expect(scheme.description).toBe('Express session');
+    });
+
+    it('applies cookie auth to all routes of a controller', () => {
+      @ApiCookieAuth('cookie')
+      @Controller('/p')
+      class PC {
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [PC],
+      });
+      const security = document.paths['/p']?.get?.security as Array<
+        Record<string, string[]>
+      >;
+      expect(security?.[0]).toHaveProperty('cookie');
+    });
+  });
+
+  describe('@ApiProduces', () => {
+    it('uses the declared content type for response content', () => {
+      @Controller('/feed')
+      class FC {
+        @ApiProduces('application/xml')
+        @Get('/')
+        @ApiResponse({ status: 200, type: String })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [FC],
+      });
+
+      const response = document.paths['/feed']?.get?.responses?.['200'] as {
+        content?: Record<string, unknown>;
+      };
+      expect(response.content).toHaveProperty('application/xml');
+      expect(response.content).not.toHaveProperty('application/json');
+    });
+
+    it('emits multiple content types when several are declared', () => {
+      @Controller('/feed')
+      class FC {
+        @ApiProduces('application/xml', 'application/json')
+        @Get('/')
+        @ApiResponse({ status: 200, type: String })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [FC],
+      });
+
+      const response = document.paths['/feed']?.get?.responses?.['200'] as {
+        content?: Record<string, unknown>;
+      };
+      expect(Object.keys(response.content ?? {}).sort()).toEqual([
+        'application/json',
+        'application/xml',
+      ]);
+    });
+  });
+
+  describe('@ApiExcludeEndpoint / @ApiExcludeController', () => {
+    it('excludes a single endpoint from the document', () => {
+      @Controller('/u')
+      class UC {
+        @ApiExcludeEndpoint()
+        @Get('/internal')
+        internal() {}
+
+        @Get('/public')
+        publicRoute() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+      expect(document.paths['/u/internal']).toBeUndefined();
+      expect(document.paths['/u/public']).toBeDefined();
+    });
+
+    it('excludes all endpoints of a controller', () => {
+      @ApiExcludeController()
+      @Controller('/internal')
+      class IC {
+        @Get('/a')
+        a() {}
+
+        @Get('/b')
+        b() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [IC],
+      });
+      expect(document.paths['/internal/a']).toBeUndefined();
+      expect(document.paths['/internal/b']).toBeUndefined();
+    });
+
+    it('ApiExcludeController overrides ApiExcludeEndpoint(false)', () => {
+      // A controller-level exclude wins even when an endpoint tries to
+      // opt back in.
+      @ApiExcludeController()
+      @Controller('/x')
+      class XC {
+        @ApiExcludeEndpoint(false)
+        @Get('/a')
+        a() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [XC],
+      });
+      expect(document.paths['/x/a']).toBeUndefined();
+    });
+  });
+
+  describe('@ApiExtraModels', () => {
+    it('includes unreferenced models in components.schemas', () => {
+      class ErrorEnvelope {
+        @ApiProperty({ type: String })
+        message!: string;
+      }
+
+      @ApiExtraModels(ErrorEnvelope)
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: String })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+      expect(document.components?.schemas?.ErrorEnvelope).toBeDefined();
+    });
+
+    it('does not duplicate models already referenced by responses', () => {
+      class UserDto {
+        @ApiProperty({ type: String })
+        name!: string;
+      }
+
+      @ApiExtraModels(UserDto)
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: UserDto })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+      // UserDto appears exactly once in components.schemas
+      expect(Object.keys(document.components?.schemas ?? {}).filter((k) => k === 'UserDto')).toHaveLength(1);
+    });
+  });
+
+  describe('@ApiExtension', () => {
+    it('emits x-* fields on the operation', () => {
+      @Controller('/u')
+      class UC {
+        @ApiExtension('x-internal', true)
+        @ApiExtension('x-rate-limit', { limit: 100 })
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+
+      const op = document.paths['/u']?.get as Record<string, unknown>;
+      expect(op['x-internal']).toBe(true);
+      expect(op['x-rate-limit']).toEqual({ limit: 100 });
+    });
+
+    it('throws when the key is not prefixed with x-', () => {
+      expect(() => {
+        // @ts-expect-error invalid call rejected at runtime
+        ApiExtension('internal', true);
+      }).toThrow(/must be prefixed with "x-"/);
+    });
+
+    it('controller-level extensions are inherited by operations', () => {
+      @ApiExtension('x-codegen', 'typescript-fetch')
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+      const op = document.paths['/u']?.get as Record<string, unknown>;
+      expect(op['x-codegen']).toBe('typescript-fetch');
+    });
+  });
+
+  describe('@ApiResponseProperty / @ApiHideProperty', () => {
+    it('emits readOnly on a response-only property', () => {
+      class UserDto {
+        @ApiResponseProperty()
+        id!: string;
+
+        @ApiResponseProperty({ type: String, format: 'date-time' })
+        createdAt!: string;
+
+        @ApiProperty({ type: String })
+        name!: string;
+      }
+
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: UserDto })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+
+      const schema = document.components?.schemas?.UserDto as {
+        properties?: Record<string, { readOnly?: boolean }>;
+      };
+      expect(schema.properties?.id?.readOnly).toBe(true);
+      expect(schema.properties?.createdAt?.readOnly).toBe(true);
+      expect(schema.properties?.name?.readOnly).toBeUndefined();
+    });
+
+    it('@ApiHideProperty removes a property from the schema', () => {
+      class UserDto {
+        @ApiProperty({ type: String })
+        id!: string;
+
+        @ApiHideProperty()
+        passwordHash!: string;
+      }
+
+      @Controller('/u')
+      class UC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: UserDto })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [UC],
+      });
+      const schema = document.components?.schemas?.UserDto as {
+        properties?: Record<string, unknown>;
+      };
+      expect(schema.properties?.id).toBeDefined();
+      expect(schema.properties?.passwordHash).toBeUndefined();
+    });
+
+    it('emits writeOnly and deprecated on a property', () => {
+      class Form {
+        @ApiProperty({ type: String, writeOnly: true })
+        password!: string;
+
+        @ApiProperty({ type: String, deprecated: true })
+        oldField!: string;
+      }
+
+      @Controller('/f')
+      class FC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: Form })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [FC],
+      });
+
+      const schema = document.components?.schemas?.Form as {
+        properties?: Record<string, { writeOnly?: boolean; deprecated?: boolean }>;
+      };
+      expect(schema.properties?.password?.writeOnly).toBe(true);
+      expect(schema.properties?.oldField?.deprecated).toBe(true);
+    });
   });
 });

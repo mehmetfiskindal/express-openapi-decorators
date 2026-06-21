@@ -7,12 +7,16 @@ import type {
   ApiBodyMetadata,
   ApiQueryMetadata,
   ApiParamMetadata,
+  ApiHeaderMetadata,
   ApiPropertyMetadata,
   ApiTagsMetadata,
   SecuritySchemeMetadata,
   ApiSecurityMetadata,
   ApiFileMetadata,
   ApiConsumesMetadata,
+  ApiProducesMetadata,
+  ApiExcludeMetadata,
+  ApiExtensionMetadata,
   MiddlewareMetadata,
   MiddlewareReference,
 } from './metadata-types.js';
@@ -29,12 +33,17 @@ class MetadataStorageImpl {
   readonly bodyParams: ApiBodyMetadata[] = [];
   readonly queryParams: ApiQueryMetadata[] = [];
   readonly pathParams: ApiParamMetadata[] = [];
+  readonly headerParams: ApiHeaderMetadata[] = [];
   readonly properties: ApiPropertyMetadata[] = [];
   readonly tags: ApiTagsMetadata[] = [];
   readonly securitySchemes: SecuritySchemeMetadata[] = [];
   readonly securityRequirements: ApiSecurityMetadata[] = [];
   readonly fileParams: ApiFileMetadata[] = [];
   readonly consumes: ApiConsumesMetadata[] = [];
+  readonly produces: ApiProducesMetadata[] = [];
+  readonly excludes: ApiExcludeMetadata[] = [];
+  readonly extraModels: Set<Function> = new Set();
+  readonly extensions: ApiExtensionMetadata[] = [];
   readonly middlewares: MiddlewareMetadata[] = [];
 
   /**
@@ -84,6 +93,31 @@ class MetadataStorageImpl {
    */
   addPathParam(metadata: ApiParamMetadata): void {
     this.pathParams.push(metadata);
+  }
+
+  /**
+   * Add header parameter metadata
+   */
+  addHeaderParam(metadata: ApiHeaderMetadata): void {
+    this.headerParams.push(metadata);
+  }
+
+  /**
+   * Get header parameters for a specific method (excludes controller-level)
+   */
+  getHeaderParamsForMethod(target: Function, methodName: string): ApiHeaderMetadata[] {
+    return this.headerParams.filter(
+      (h) => h.target === target && h.methodName === methodName
+    );
+  }
+
+  /**
+   * Get controller-level header parameters (methodName === undefined)
+   */
+  getHeaderParamsForController(controller: Function): ApiHeaderMetadata[] {
+    return this.headerParams.filter(
+      (h) => h.target === controller && h.methodName === undefined
+    );
   }
 
   /**
@@ -198,6 +232,102 @@ class MetadataStorageImpl {
     return this.consumes.find(
       (c) => c.target === target && c.methodName === methodName
     );
+  }
+
+  /**
+   * Add produces metadata (@ApiProduces)
+   */
+  addProduces(metadata: ApiProducesMetadata): void {
+    this.produces.push(metadata);
+  }
+
+  /**
+   * Get produces metadata for a specific method
+   */
+  getProducesForMethod(target: Function, methodName: string): ApiProducesMetadata | undefined {
+    return this.produces.find(
+      (p) => p.target === target && p.methodName === methodName
+    );
+  }
+
+  /**
+   * Add exclude metadata (@ApiExcludeEndpoint / @ApiExcludeController)
+   */
+  addExclude(metadata: ApiExcludeMetadata): void {
+    this.excludes.push(metadata);
+  }
+
+  /**
+   * Returns true if a controller should be excluded entirely.
+   */
+  isControllerExcluded(controller: Function): boolean {
+    return this.excludes.some(
+      (e) => e.target === controller && e.methodName === undefined && e.exclude
+    );
+  }
+
+  /**
+   * Returns true if a specific method should be excluded.
+   * A controller-level @ApiExcludeController() overrides everything.
+   */
+  isMethodExcluded(target: Function, methodName: string): boolean {
+    if (this.isControllerExcluded(target)) return true;
+    return this.excludes.some(
+      (e) => e.target === target && e.methodName === methodName && e.exclude
+    );
+  }
+
+  /**
+   * Register a class to be included in `components.schemas` even when
+   * it is not directly referenced by any response or body parameter.
+   */
+  addExtraModel(model: Function): void {
+    this.extraModels.add(model);
+  }
+
+  /**
+   * Get the snapshot of currently registered extra models.
+   */
+  getExtraModels(): Function[] {
+    return Array.from(this.extraModels);
+  }
+
+  /**
+   * Register an OpenAPI "x-*" extension value.
+   * Multiple @ApiExtension on the same target are merged, with later
+   * declarations overwriting earlier ones on the same key.
+   */
+  addExtension(metadata: ApiExtensionMetadata): void {
+    const idx = this.extensions.findIndex(
+      (e) =>
+        e.target === metadata.target &&
+        e.methodName === metadata.methodName &&
+        e.key === metadata.key
+    );
+    if (idx >= 0) {
+      this.extensions[idx] = metadata;
+    } else {
+      this.extensions.push(metadata);
+    }
+  }
+
+  /**
+   * Get the merged extensions map for a method (controller-level
+   * extensions are inherited and can be overridden by method-level).
+   */
+  getExtensionsForMethod(target: Function, methodName: string): Record<string, unknown> {
+    const merged: Record<string, unknown> = {};
+    for (const e of this.extensions) {
+      if (e.target === target && e.methodName === undefined) {
+        merged[e.key] = e.value;
+      }
+    }
+    for (const e of this.extensions) {
+      if (e.target === target && e.methodName === methodName) {
+        merged[e.key] = e.value;
+      }
+    }
+    return merged;
   }
 
   /**
@@ -321,12 +451,17 @@ class MetadataStorageImpl {
     this.bodyParams.length = 0;
     this.queryParams.length = 0;
     this.pathParams.length = 0;
+    this.headerParams.length = 0;
     this.properties.length = 0;
     this.tags.length = 0;
     this.securitySchemes.length = 0;
     this.securityRequirements.length = 0;
     this.fileParams.length = 0;
     this.consumes.length = 0;
+    this.produces.length = 0;
+    this.excludes.length = 0;
+    this.extraModels.clear();
+    this.extensions.length = 0;
     this.middlewares.length = 0;
     // Reset schema cache so re-running with the same DTO class reflects
     // any updates to the decorator metadata.

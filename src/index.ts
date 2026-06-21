@@ -10,12 +10,16 @@ export type {
   ApiBodyMetadata,
   ApiQueryMetadata,
   ApiParamMetadata,
+  ApiHeaderMetadata,
   ApiPropertyMetadata,
   ApiTagsMetadata,
   SecuritySchemeMetadata,
   ApiSecurityMetadata,
   ApiFileMetadata,
   ApiConsumesMetadata,
+  ApiProducesMetadata,
+  ApiExcludeMetadata,
+  ApiExtensionMetadata,
   MiddlewareMetadata,
   MiddlewareFunction,
   MiddlewareReference,
@@ -40,7 +44,12 @@ export { ApiQuery } from './decorators/api-query.decorator.js';
 export type { ApiQueryOptions } from './decorators/api-query.decorator.js';
 export { ApiParam } from './decorators/api-param.decorator.js';
 export type { ApiParamOptions } from './decorators/api-param.decorator.js';
-export { ApiProperty, ApiPropertyOptional } from './decorators/api-property.decorator.js';
+export {
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiResponseProperty,
+  ApiHideProperty,
+} from './decorators/api-property.decorator.js';
 export type { ApiPropertyOptions } from './decorators/api-property.decorator.js';
 
 // Decorators - Security
@@ -48,6 +57,7 @@ export {
   ApiBearerAuth,
   ApiBasicAuth,
   ApiApiKey,
+  ApiCookieAuth,
   ApiOAuth2,
   ApiOpenIdConnect,
   ApiSecurity,
@@ -61,17 +71,39 @@ export type {
   OpenIdConnectOptions,
 } from './decorators/api-security.decorator.js';
 
+// Decorators - Header
+export {
+  ApiHeader,
+  ApiHeaders,
+} from './decorators/api-header.decorator.js';
+export type {
+  ApiHeaderOptions,
+} from './decorators/api-header.decorator.js';
+
 // Decorators - File Upload
 export {
   ApiFile,
   ApiFiles,
   ApiConsumes,
+  ApiProduces,
   ApiFormData,
 } from './decorators/api-file.decorator.js';
 export type {
   ApiFileOptions,
   ApiFilesOptions,
 } from './decorators/api-file.decorator.js';
+
+// Decorators - OpenAPI extensions
+export { ApiExtension } from './decorators/api-extension.decorator.js';
+
+// Decorators - Exclusion
+export {
+  ApiExcludeEndpoint,
+  ApiExcludeController,
+} from './decorators/api-exclude.decorator.js';
+
+// Decorators - Extra models
+export { ApiExtraModels } from './decorators/api-extra-models.decorator.js';
 
 // Decorators - Middleware
 export { Use, Middleware } from './decorators/middleware.decorator.js';

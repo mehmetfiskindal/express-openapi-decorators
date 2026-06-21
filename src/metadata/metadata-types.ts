@@ -108,6 +108,25 @@ export interface ApiParamMetadata {
 }
 
 /**
+ * Metadata for @ApiHeader decorator
+ * Mirrors the shape of @ApiQuery but with the `in` field fixed to 'header'.
+ * `methodName` is `undefined` for controller-level headers.
+ */
+export interface ApiHeaderMetadata {
+  target: Function;
+  methodName: string | undefined;
+  name: string;
+  type: Function;
+  required: boolean;
+  description: string | undefined;
+  example: unknown;
+  format: string | undefined;
+  enum: unknown[] | undefined;
+  default: unknown;
+  deprecated: boolean;
+}
+
+/**
  * Metadata for @ApiProperty decorator on DTO classes
  */
 export interface ApiPropertyMetadata {
@@ -121,6 +140,10 @@ export interface ApiPropertyMetadata {
   format: string | undefined;
   default: unknown;
   isArray: boolean;
+  readOnly: boolean;
+  writeOnly: boolean;
+  deprecated: boolean;
+  hidden: boolean;
 }
 
 /**
@@ -196,6 +219,38 @@ export interface ApiConsumesMetadata {
   target: Function;
   methodName: string;
   contentTypes: string[];
+}
+
+/**
+ * Metadata for response content type (@ApiProduces)
+ * Mirrors ApiConsumesMetadata; the runtime effect is the same — the
+ * OpenAPI generator writes the given content type into each response's
+ * `content` map (or merges them when more than one is declared).
+ */
+export interface ApiProducesMetadata {
+  target: Function;
+  methodName: string;
+  contentTypes: string[];
+}
+
+/**
+ * Metadata for @ApiExcludeEndpoint / @ApiExcludeController
+ * When present, the path generator skips emitting paths for the target.
+ */
+export interface ApiExcludeMetadata {
+  target: Function;
+  methodName?: string; // undefined for controller-level exclusion
+  exclude: boolean;
+}
+
+/**
+ * Metadata for @ApiExtension — a single OpenAPI "x-*" extension entry.
+ */
+export interface ApiExtensionMetadata {
+  target: Function;
+  methodName?: string; // undefined for controller-level
+  key: string;
+  value: unknown;
 }
 
 /**

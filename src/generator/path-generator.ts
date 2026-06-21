@@ -193,6 +193,48 @@ function generatePathParameters(target: Function, methodName: string): OpenAPIV3
 }
 
 /**
+ * Generate header parameters for a method (V3) — combines method-level
+ * and controller-level @ApiHeader declarations.
+ */
+function generateHeaderParameters(
+  controller: Function,
+  target: Function,
+  methodName: string
+): OpenAPIV3.ParameterObject[] {
+  const methodHeaders = metadataStorage.getHeaderParamsForMethod(target, methodName);
+  const controllerHeaders = metadataStorage.getHeaderParamsForController(controller);
+  const all = [...controllerHeaders, ...methodHeaders];
+
+  return all.map((param): OpenAPIV3.ParameterObject => {
+    const parameter: OpenAPIV3.ParameterObject = {
+      name: param.name,
+      in: 'header',
+      required: param.required ?? false,
+      schema: buildPrimitiveParameterSchema(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
+    };
+
+    if (param.description) {
+      parameter.description = param.description;
+    }
+
+    if (param.example !== undefined) {
+      parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
+    }
+
+    return parameter;
+  });
+}
+
+/**
  * Generate multipart/form-data schema for file uploads
  */
 function generateFileUploadSchema(fileParams: import('../metadata/metadata-types.js').ApiFileMetadata[]): OpenAPIV3.SchemaObject {
@@ -296,6 +338,10 @@ function generateRequestBody(target: Function, methodName: string): OpenAPIV3.Re
 function generateResponses(target: Function, methodName: string): OpenAPIV3.ResponsesObject {
   const responses: OpenAPIV3.ResponsesObject = {};
   const responseMetadataList = metadataStorage.getResponsesForMethod(target, methodName);
+  // @ApiProduces lets the developer override the default
+  // 'application/json' content type for the operation's responses.
+  const produces = metadataStorage.getProducesForMethod(target, methodName);
+  const contentTypes = produces?.contentTypes ?? ['application/json'];
 
   for (const responseMeta of responseMetadataList) {
     const response: OpenAPIV3.ResponseObject = {
@@ -315,11 +361,11 @@ function generateResponses(target: Function, methodName: string): OpenAPIV3.Resp
         schema = schemaForType(responseMeta.type);
       }
 
-      response.content = {
-        'application/json': {
-          schema,
-        },
-      };
+      const content: Record<string, { schema: typeof schema }> = {};
+      for (const ct of contentTypes) {
+        content[ct] = { schema };
+      }
+      response.content = content;
     }
 
     responses[responseMeta.status.toString()] = response;
@@ -435,10 +481,11 @@ function generateOperation(
     }
   }
 
-  // Add parameters (query and path)
+  // Add parameters (query, path, header)
   const parameters: OpenAPIV3.ParameterObject[] = [
     ...generateQueryParameters(method.controllerTarget, method.methodName),
     ...generatePathParameters(method.controllerTarget, method.methodName),
+    ...generateHeaderParameters(controller, method.controllerTarget, method.methodName),
   ];
 
   if (parameters.length > 0) {
@@ -470,6 +517,16 @@ function generateOperation(
     operation.security = security;
   }
 
+  // Apply OpenAPI "x-*" extensions (controller-level inherited,
+  // method-level overrides on key collision).
+  const extensions = metadataStorage.getExtensionsForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  for (const [key, value] of Object.entries(extensions)) {
+    (operation as Record<string, unknown>)[key] = value;
+  }
+
   return operation as OpenAPIV3.OperationObject;
 }
 
@@ -485,9 +542,19 @@ export function generatePaths(controllers: Function[]): OpenAPIV3.PathsObject {
       continue;
     }
 
+    // Skip the whole controller if @ApiExcludeController() is set
+    if (metadataStorage.isControllerExcluded(controller)) {
+      continue;
+    }
+
     const methods = metadataStorage.getMethodsForController(controller);
 
     for (const method of methods) {
+      // Skip this method if @ApiExcludeEndpoint() is set
+      if (metadataStorage.isMethodExcluded(method.controllerTarget, method.methodName)) {
+        continue;
+      }
+
       const fullPath = buildFullPath(controllerMeta.basePath, method.path);
       const pathKey = httpMethodToPathKey[method.httpMethod];
 
@@ -575,6 +642,47 @@ function generatePathParametersV31(target: Function, methodName: string): Parame
       name: param.name,
       in: 'path',
       required: true, // Path parameters are always required
+      schema: buildPrimitiveParameterSchemaV31(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
+    };
+
+    if (param.description) {
+      parameter.description = param.description;
+    }
+
+    if (param.example !== undefined) {
+      parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
+    }
+
+    return parameter;
+  });
+}
+
+/**
+ * Generate header parameters for a method (V3.1).
+ */
+function generateHeaderParametersV31(
+  controller: Function,
+  target: Function,
+  methodName: string
+): ParameterObjectV31[] {
+  const methodHeaders = metadataStorage.getHeaderParamsForMethod(target, methodName);
+  const controllerHeaders = metadataStorage.getHeaderParamsForController(controller);
+  const all = [...controllerHeaders, ...methodHeaders];
+
+  return all.map((param): ParameterObjectV31 => {
+    const parameter: ParameterObjectV31 = {
+      name: param.name,
+      in: 'header',
+      required: param.required ?? false,
       schema: buildPrimitiveParameterSchemaV31(
         param.type,
         param.format,
@@ -704,6 +812,8 @@ function generateRequestBodyV31(target: Function, methodName: string): RequestBo
 function generateResponsesV31(target: Function, methodName: string): OpenAPIV3_1.ResponsesObject {
   const responses: OpenAPIV3_1.ResponsesObject = {};
   const responseMetadataList = metadataStorage.getResponsesForMethod(target, methodName);
+  const produces = metadataStorage.getProducesForMethod(target, methodName);
+  const contentTypes = produces?.contentTypes ?? ['application/json'];
 
   for (const responseMeta of responseMetadataList) {
     const response: ResponseObjectV31 = {
@@ -723,11 +833,11 @@ function generateResponsesV31(target: Function, methodName: string): OpenAPIV3_1
         schema = schemaForTypeV31(responseMeta.type);
       }
 
-      response.content = {
-        'application/json': {
-          schema,
-        },
-      };
+      const content: Record<string, { schema: typeof schema }> = {};
+      for (const ct of contentTypes) {
+        content[ct] = { schema };
+      }
+      response.content = content;
     }
 
     responses[responseMeta.status.toString()] = response;
@@ -825,10 +935,11 @@ function generateOperationV31(
     }
   }
 
-  // Add parameters (query and path)
+  // Add parameters (query, path, header)
   const parameters: ParameterObjectV31[] = [
     ...generateQueryParametersV31(method.controllerTarget, method.methodName),
     ...generatePathParametersV31(method.controllerTarget, method.methodName),
+    ...generateHeaderParametersV31(controller, method.controllerTarget, method.methodName),
   ];
 
   if (parameters.length > 0) {
@@ -860,6 +971,15 @@ function generateOperationV31(
     operation.security = security;
   }
 
+  // Apply OpenAPI "x-*" extensions
+  const extensions = metadataStorage.getExtensionsForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  for (const [key, value] of Object.entries(extensions)) {
+    (operation as Record<string, unknown>)[key] = value;
+  }
+
   return operation as OperationObjectV31;
 }
 
@@ -875,9 +995,17 @@ export function generatePathsV31(controllers: Function[]): PathsObjectV31 {
       continue;
     }
 
+    if (metadataStorage.isControllerExcluded(controller)) {
+      continue;
+    }
+
     const methods = metadataStorage.getMethodsForController(controller);
 
     for (const method of methods) {
+      if (metadataStorage.isMethodExcluded(method.controllerTarget, method.methodName)) {
+        continue;
+      }
+
       const fullPath = buildFullPath(controllerMeta.basePath, method.path);
       const pathKey = httpMethodToPathKey[method.httpMethod];
 
