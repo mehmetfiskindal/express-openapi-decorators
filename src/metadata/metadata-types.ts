@@ -84,6 +84,10 @@ export interface ApiQueryMetadata {
   required: boolean;
   description: string | undefined;
   example: unknown;
+  format: string | undefined;
+  enum: unknown[] | undefined;
+  default: unknown;
+  deprecated: boolean;
 }
 
 /**
@@ -97,6 +101,10 @@ export interface ApiParamMetadata {
   required: boolean;
   description: string | undefined;
   example: unknown;
+  format: string | undefined;
+  enum: unknown[] | undefined;
+  default: unknown;
+  deprecated: boolean;
 }
 
 /**

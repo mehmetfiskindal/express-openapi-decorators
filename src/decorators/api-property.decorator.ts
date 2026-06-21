@@ -108,7 +108,7 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
       throw new Error(`@ApiProperty decorator requires a valid target. Make sure 'experimentalDecorators' and 'emitDecoratorMetadata' are enabled in tsconfig.json`);
     }
     const targetClass = target.constructor as Function;
-    
+
     // Try to get design:type from reflect-metadata
     const designType: Function | undefined = Reflect.getMetadata(
       MetadataKeys.DESIGN_TYPE,
@@ -124,8 +124,25 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
       // If no explicit type, try to infer from design:type
       if (designType) {
         if (designType === Array) {
-          // For arrays, we need explicit type
+          // For arrays inferred from design:type, attempt to read the element
+          // type from design:paramtypes so the schema can still emit a useful
+          // `items` reference. If the element type cannot be determined we
+          // fall back to `Object` to keep the schema valid.
           isArray = true;
+          const paramTypes = Reflect.getMetadata(
+            MetadataKeys.DESIGN_PARAM_TYPES,
+            target,
+            propertyKey
+          ) as unknown[] | undefined;
+          const inner = Array.isArray(paramTypes) ? paramTypes[0] : undefined;
+          if (inner && typeof inner === 'function') {
+            type = inner as Function;
+          } else {
+            // Leave `type` undefined; schema-generator.ts emits a safe
+            // `{ type: 'object' }` item when both type and isArray are
+            // present but no element type is known.
+            type = undefined;
+          }
         } else {
           type = designType;
         }

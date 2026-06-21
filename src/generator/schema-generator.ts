@@ -63,7 +63,7 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
   // Handle array type
   if (metadata.isArray && metadata.type) {
     schema.type = 'array';
-    
+
     // Check if array item type is a primitive or DTO
     if (isPrimitiveType(metadata.type)) {
       schema.items = getPrimitiveSchema(metadata.type);
@@ -73,6 +73,12 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
         $ref: `#/components/schemas/${metadata.type.name}`,
       } as OpenAPIV3.ReferenceObject;
     }
+  } else if (metadata.isArray && !metadata.type) {
+    // Array with unknown element type (e.g. inferred from design:type = Array
+    // without an explicit element type). Emit a safe open-ended array schema
+    // so the document stays valid OpenAPI.
+    schema.type = 'array';
+    schema.items = {};
   } else if (metadata.type) {
     // Non-array type
     if (isPrimitiveType(metadata.type)) {
@@ -152,8 +158,9 @@ export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject
   const schema: OpenAPIV3.SchemaObject = {
     type: 'object',
     properties: {} as Record<string, OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject>,
-    required: [],
   };
+
+  const required: string[] = [];
 
   for (const property of properties) {
     // Add property to schema
@@ -162,9 +169,13 @@ export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject
     }
 
     // Add to required list if property is required
-    if (property.required && schema.required) {
-      schema.required.push(property.propertyKey);
+    if (property.required) {
+      required.push(property.propertyKey);
     }
+  }
+
+  if (required.length > 0) {
+    schema.required = required;
   }
 
   // Cache the schema
@@ -271,6 +282,12 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
         $ref: `#/components/schemas/${metadata.type.name}`,
       } as OpenAPIV3_1.ReferenceObject;
     }
+  } else if (metadata.isArray && !metadata.type) {
+    // Array with unknown element type (e.g. inferred from design:type = Array
+    // without an explicit element type). Emit a safe open-ended array schema
+    // so the document stays valid OpenAPI.
+    schema.type = 'array';
+    schema.items = {};
   } else if (metadata.type) {
     // Non-array type
     if (isPrimitiveType(metadata.type)) {
@@ -349,8 +366,9 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
   const schema: SchemaObjectV31 = {
     type: 'object',
     properties: {} as Record<string, SchemaObjectV31 | OpenAPIV3_1.ReferenceObject>,
-    required: [],
   };
+
+  const required: string[] = [];
 
   for (const property of properties) {
     // Add property to schema
@@ -359,9 +377,13 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
     }
 
     // Add to required list if property is required
-    if (property.required && schema.required) {
-      schema.required.push(property.propertyKey);
+    if (property.required) {
+      required.push(property.propertyKey);
     }
+  }
+
+  if (required.length > 0) {
+    schema.required = required;
   }
 
   // Cache the schema
