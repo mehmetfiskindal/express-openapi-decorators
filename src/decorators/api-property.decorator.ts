@@ -49,6 +49,62 @@ export interface ApiPropertyOptions {
    * Automatically set to true if type is an array
    */
   isArray?: boolean;
+
+  /**
+   * Mark the property as read-only. Useful for response-only DTOs
+   * where the value is server-generated and should not be accepted
+   * as input on a request body.
+   * @default false
+   */
+  readOnly?: boolean;
+
+  /**
+   * Mark the property as write-only. Useful for properties that
+   * are accepted on requests but never returned in responses
+   * (e.g. password fields).
+   * @default false
+   */
+  writeOnly?: boolean;
+
+  /**
+   * Mark the property as deprecated.
+   * @default false
+   */
+  deprecated?: boolean;
+
+  /**
+   * Hide the property from the generated OpenAPI schema entirely.
+   * Useful for internal fields that should not appear in the public API.
+   * @default false
+   */
+  hidden?: boolean;
+
+  /**
+   * Polymorphism: list of DTO classes to be combined with `oneOf` in
+   * the generated schema. The resulting schema accepts any of the
+   * provided types. The `@ApiProperty.type` field is ignored when this
+   * is provided.
+   */
+  oneOf?: Function[];
+
+  /**
+   * Polymorphism: list of DTO classes to be combined with `anyOf` in
+   * the generated schema.
+   */
+  anyOf?: Function[];
+
+  /**
+   * Polymorphism: list of DTO classes to be combined with `allOf` in
+   * the generated schema. Useful for mixin / interface composition.
+   */
+  allOf?: Function[];
+
+  /**
+   * Polymorphism: discriminator configuration. When set, the schema
+   * is generated with the `discriminator` block (e.g. `{ propertyName:
+   * 'kind', mapping: { Cat: '#/components/schemas/Cat' } }`).
+   */
+  discriminator?: { propertyName: string; mapping?: Record<string, string> };
 }
 
 /**
@@ -108,7 +164,7 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
       throw new Error(`@ApiProperty decorator requires a valid target. Make sure 'experimentalDecorators' and 'emitDecoratorMetadata' are enabled in tsconfig.json`);
     }
     const targetClass = target.constructor as Function;
-    
+
     // Try to get design:type from reflect-metadata
     const designType: Function | undefined = Reflect.getMetadata(
       MetadataKeys.DESIGN_TYPE,
@@ -124,8 +180,25 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
       // If no explicit type, try to infer from design:type
       if (designType) {
         if (designType === Array) {
-          // For arrays, we need explicit type
+          // For arrays inferred from design:type, attempt to read the element
+          // type from design:paramtypes so the schema can still emit a useful
+          // `items` reference. If the element type cannot be determined we
+          // fall back to `Object` to keep the schema valid.
           isArray = true;
+          const paramTypes = Reflect.getMetadata(
+            MetadataKeys.DESIGN_PARAM_TYPES,
+            target,
+            propertyKey
+          ) as unknown[] | undefined;
+          const inner = Array.isArray(paramTypes) ? paramTypes[0] : undefined;
+          if (inner && typeof inner === 'function') {
+            type = inner as Function;
+          } else {
+            // Leave `type` undefined; schema-generator.ts emits a safe
+            // `{ type: 'object' }` item when both type and isArray are
+            // present but no element type is known.
+            type = undefined;
+          }
         } else {
           type = designType;
         }
@@ -149,6 +222,14 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
       format: options.format,
       default: options.default,
       isArray,
+      readOnly: options.readOnly ?? false,
+      writeOnly: options.writeOnly ?? false,
+      deprecated: options.deprecated ?? false,
+      hidden: options.hidden ?? false,
+      oneOf: options.oneOf,
+      anyOf: options.anyOf,
+      allOf: options.allOf,
+      discriminator: options.discriminator,
     };
 
     metadataStorage.addProperty(metadata);
@@ -157,15 +238,15 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
 
 /**
  * @ApiPropertyOptional decorator - marks a property as optional
- * 
+ *
  * Shorthand for @ApiProperty({ required: false, ...options })
- * 
+ *
  * @example
  * ```typescript
  * export class UserDto {
  *   @ApiProperty()
  *   id: string;
- * 
+ *
  *   @ApiPropertyOptional({ type: String })
  *   nickname?: string;
  * }
@@ -176,4 +257,50 @@ export function ApiPropertyOptional(options: Omit<ApiPropertyOptions, 'required'
     ...options,
     required: false,
   });
+}
+
+/**
+ * @ApiResponseProperty decorator - marks a property as read-only,
+ * intended to appear in responses but not in request bodies.
+ *
+ * Shorthand for @ApiProperty({ readOnly: true, ...options })
+ *
+ * @example
+ * ```typescript
+ * export class UserDto {
+ *   @ApiResponseProperty()
+ *   id!: string;
+ *
+ *   @ApiResponseProperty({ type: String, format: 'date-time' })
+ *   createdAt!: string;
+ * }
+ * ```
+ */
+export function ApiResponseProperty(
+  options: Omit<ApiPropertyOptions, 'readOnly' | 'hidden' | 'writeOnly' | 'deprecated' | 'required'> = {}
+): PropertyDecorator {
+  return ApiProperty({
+    ...options,
+    readOnly: true,
+  } as ApiPropertyOptions);
+}
+
+/**
+ * @ApiHideProperty decorator - marks a property to be excluded from
+ * the generated OpenAPI schema. The runtime value is still available
+ * on instances, but it will not appear in `components.schemas`.
+ *
+ * @example
+ * ```typescript
+ * export class UserDto {
+ *   @ApiProperty()
+ *   id!: string;
+ *
+ *   @ApiHideProperty()
+ *   passwordHash!: string; // not exposed in OpenAPI document
+ * }
+ * ```
+ */
+export function ApiHideProperty(): PropertyDecorator {
+  return ApiProperty({ hidden: true } as ApiPropertyOptions);
 }

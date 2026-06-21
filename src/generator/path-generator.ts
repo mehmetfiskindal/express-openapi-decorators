@@ -1,6 +1,7 @@
 import type { OpenAPIV3, OpenAPIV3_1 } from '../types/openapi.types.js';
 import { metadataStorage } from '../metadata/metadata-storage.js';
 import type { MethodMetadata, HttpMethod } from '../metadata/metadata-types.js';
+import { resolveSchemaName } from './schema-generator.js';
 
 
 // Type aliases for both versions
@@ -47,11 +48,25 @@ function convertExpressParamsToOpenApi(path: string): string {
 
 /**
  * Get primitive type for OpenAPI parameter schema
+ * Non-primitive types are coerced to 'string' because path/query parameters
+ * cannot be modelled as JSON Schema references in OpenAPI 3.0/3.1.
  */
 function getPrimitiveTypeName(type: Function): 'string' | 'number' | 'boolean' {
   if (type === String) return 'string';
   if (type === Number) return 'number';
   if (type === Boolean) return 'boolean';
+  // Anything else (DTO classes, custom classes, etc.) is not allowed as a
+  // primitive path/query/header parameter in OpenAPI. Fall back to 'string'
+  // so the generated document is still valid even if a developer decorates
+  // a parameter with a class type by mistake.
+  if (typeof console !== 'undefined' && type && type !== Object) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[express-openapi-decorators] Parameter type "${type.name ?? 'anonymous'}" ` +
+        `is not a primitive (String/Number/Boolean). Coercing to "string" ` +
+        `for OpenAPI compatibility.`
+    );
+  }
   return 'string';
 }
 
@@ -67,7 +82,7 @@ function schemaForType(type: Function): OpenAPIV3.SchemaObject | OpenAPIV3.Refer
   }
 
   return {
-    $ref: `#/components/schemas/${type.name}`,
+    $ref: `#/components/schemas/${resolveSchemaName(type)}`,
   };
 }
 
@@ -79,8 +94,33 @@ function schemaForTypeV31(type: Function): OpenAPIV3_1.SchemaObject | OpenAPIV3_
   }
 
   return {
-    $ref: `#/components/schemas/${type.name}`,
+    $ref: `#/components/schemas/${resolveSchemaName(type)}`,
   };
+}
+
+/**
+ * Build the schema for a primitive parameter (query/path/header).
+ * Surfaces format, enum and default in addition to the base type.
+ */
+function buildPrimitiveParameterSchema(
+  type: Function,
+  format: string | undefined,
+  enumValues: unknown[] | undefined,
+  defaultValue: unknown
+): OpenAPIV3.SchemaObject {
+  const schema: OpenAPIV3.SchemaObject = {
+    type: getPrimitiveTypeName(type),
+  };
+  if (format) {
+    schema.format = format;
+  }
+  if (enumValues && enumValues.length > 0) {
+    schema.enum = enumValues;
+  }
+  if (defaultValue !== undefined) {
+    schema.default = defaultValue;
+  }
+  return schema;
 }
 
 /**
@@ -88,15 +128,18 @@ function schemaForTypeV31(type: Function): OpenAPIV3_1.SchemaObject | OpenAPIV3_
  */
 function generateQueryParameters(target: Function, methodName: string): OpenAPIV3.ParameterObject[] {
   const queryParams = metadataStorage.getQueryParamsForMethod(target, methodName);
-  
+
   return queryParams.map((param): OpenAPIV3.ParameterObject => {
     const parameter: OpenAPIV3.ParameterObject = {
       name: param.name,
       in: 'query',
       required: param.required ?? false,
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchema(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -105,6 +148,10 @@ function generateQueryParameters(target: Function, methodName: string): OpenAPIV
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -116,15 +163,18 @@ function generateQueryParameters(target: Function, methodName: string): OpenAPIV
  */
 function generatePathParameters(target: Function, methodName: string): OpenAPIV3.ParameterObject[] {
   const pathParams = metadataStorage.getPathParamsForMethod(target, methodName);
-  
+
   return pathParams.map((param): OpenAPIV3.ParameterObject => {
     const parameter: OpenAPIV3.ParameterObject = {
       name: param.name,
       in: 'path',
       required: true, // Path parameters are always required
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchema(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -133,6 +183,52 @@ function generatePathParameters(target: Function, methodName: string): OpenAPIV3
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
+    }
+
+    return parameter;
+  });
+}
+
+/**
+ * Generate header parameters for a method (V3) — combines method-level
+ * and controller-level @ApiHeader declarations.
+ */
+function generateHeaderParameters(
+  controller: Function,
+  target: Function,
+  methodName: string
+): OpenAPIV3.ParameterObject[] {
+  const methodHeaders = metadataStorage.getHeaderParamsForMethod(target, methodName);
+  const controllerHeaders = metadataStorage.getHeaderParamsForController(controller);
+  const all = [...controllerHeaders, ...methodHeaders];
+
+  return all.map((param): OpenAPIV3.ParameterObject => {
+    const parameter: OpenAPIV3.ParameterObject = {
+      name: param.name,
+      in: 'header',
+      required: param.required ?? false,
+      schema: buildPrimitiveParameterSchema(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
+    };
+
+    if (param.description) {
+      parameter.description = param.description;
+    }
+
+    if (param.example !== undefined) {
+      parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -243,6 +339,10 @@ function generateRequestBody(target: Function, methodName: string): OpenAPIV3.Re
 function generateResponses(target: Function, methodName: string): OpenAPIV3.ResponsesObject {
   const responses: OpenAPIV3.ResponsesObject = {};
   const responseMetadataList = metadataStorage.getResponsesForMethod(target, methodName);
+  // @ApiProduces lets the developer override the default
+  // 'application/json' content type for the operation's responses.
+  const produces = metadataStorage.getProducesForMethod(target, methodName);
+  const contentTypes = produces?.contentTypes ?? ['application/json'];
 
   for (const responseMeta of responseMetadataList) {
     const response: OpenAPIV3.ResponseObject = {
@@ -262,11 +362,45 @@ function generateResponses(target: Function, methodName: string): OpenAPIV3.Resp
         schema = schemaForType(responseMeta.type);
       }
 
-      response.content = {
-        'application/json': {
-          schema,
-        },
-      };
+      const content: Record<string, { schema: typeof schema }> = {};
+      for (const ct of contentTypes) {
+        content[ct] = { schema };
+      }
+      response.content = content;
+    }
+
+    // Attach response headers (@ApiResponse.options.headers)
+    const headers = metadataStorage.getResponseHeadersForMethod(
+      target,
+      methodName,
+      responseMeta.status
+    );
+    if (headers && Object.keys(headers).length > 0) {
+      const headerMap: Record<string, OpenAPIV3.HeaderObject> = {};
+      for (const [name, def] of Object.entries(headers)) {
+        const h: OpenAPIV3.HeaderObject = {};
+        if (def.description !== undefined) h.description = def.description;
+        if (def.required !== undefined) h.required = def.required;
+        if (def.schema !== undefined) h.schema = def.schema as OpenAPIV3.SchemaObject;
+        headerMap[name] = h;
+      }
+      response.headers = headerMap;
+    }
+
+    // Attach @ApiLink definitions to the first response that has content
+    const links = metadataStorage.getLinksForMethod(target, methodName);
+    if (links.length > 0 && !response.links) {
+      const linkMap: Record<string, OpenAPIV3.LinkObject> = {};
+      for (const link of links) {
+        const linkObj: OpenAPIV3.LinkObject = {
+          operationId: `${link.fromType.name}_${link.fromField}`,
+          parameters: {
+            [link.routeParam]: `$response.body#/${link.fromField}`,
+          },
+        };
+        linkMap[link.fromType.name] = linkObj;
+      }
+      response.links = linkMap;
     }
 
     responses[responseMeta.status.toString()] = response;
@@ -310,15 +444,15 @@ function generateSecurityRequirements(
 ): OpenAPIV3.SecurityRequirementObject[] | undefined {
   // Get controller-level security
   const controllerSecurity = metadataStorage.getSecurityForController(controller);
-  
+
   // Get method-level security
   const methodSecurity = metadataStorage.getSecurityForMethod(target, methodName);
-  
+
   // Method-level security takes precedence over controller-level
   // If method has security defined (including empty array for @Public()), use it
   // Otherwise, use controller-level security
   let effectiveSecurity: typeof methodSecurity;
-  
+
   if (methodSecurity.length > 0) {
     effectiveSecurity = methodSecurity;
   } else if (controllerSecurity.length > 0) {
@@ -326,7 +460,14 @@ function generateSecurityRequirements(
   } else {
     return undefined;
   }
-  
+
+  // @Public() stores schemes: [] to signal "no security required". Skip
+  // emitting `security: [{}]` (which Swagger UI renders as "anonymous only")
+  // and return undefined so the operation inherits no security block.
+  if (effectiveSecurity.every((r) => r.schemes.length === 0)) {
+    return undefined;
+  }
+
   // Convert to OpenAPI format
   const security: OpenAPIV3.SecurityRequirementObject[] = effectiveSecurity.map(req => {
     const requirement: OpenAPIV3.SecurityRequirementObject = {};
@@ -335,7 +476,7 @@ function generateSecurityRequirements(
     }
     return requirement;
   });
-  
+
   return security.length > 0 ? security : undefined;
 }
 
@@ -350,17 +491,22 @@ function generateOperation(
     operationId: `${controller.name}_${method.methodName}`,
   };
 
-  // Add tags from controller
-  const tags = metadataStorage.getTagsForController(controller);
-  if (tags.length > 0) {
-    operation.tags = tags;
-  }
-
-  // Add operation metadata
-  const operationMeta = metadataStorage.getOperationForMethod(
+  // Add tags from controller (unless overridden at method level)
+  const operationMetaForTags = metadataStorage.getOperationForMethod(
     method.controllerTarget,
     method.methodName
   );
+  if (operationMetaForTags?.tags !== undefined) {
+    operation.tags = operationMetaForTags.tags;
+  } else {
+    const tags = metadataStorage.getTagsForController(controller);
+    if (tags.length > 0) {
+      operation.tags = tags;
+    }
+  }
+
+  // Add operation metadata
+  const operationMeta = operationMetaForTags;
 
   if (operationMeta) {
     operation.summary = operationMeta.summary;
@@ -375,10 +521,11 @@ function generateOperation(
     }
   }
 
-  // Add parameters (query and path)
+  // Add parameters (query, path, header)
   const parameters: OpenAPIV3.ParameterObject[] = [
     ...generateQueryParameters(method.controllerTarget, method.methodName),
     ...generatePathParameters(method.controllerTarget, method.methodName),
+    ...generateHeaderParameters(controller, method.controllerTarget, method.methodName),
   ];
 
   if (parameters.length > 0) {
@@ -410,6 +557,35 @@ function generateOperation(
     operation.security = security;
   }
 
+  // Apply OpenAPI "x-*" extensions (controller-level inherited,
+  // method-level overrides on key collision).
+  const extensions = metadataStorage.getExtensionsForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  for (const [key, value] of Object.entries(extensions)) {
+    (operation as Record<string, unknown>)[key] = value;
+  }
+
+  // Attach @ApiCallback / @ApiCallbacks definitions
+  const callbacks = metadataStorage.getCallbacksForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  if (callbacks.length > 0) {
+    const callbackMap: Record<string, Record<string, unknown>> = {};
+    for (const c of callbacks) {
+      const inner = callbackMap[c.name] ?? {};
+      inner[c.expression] = c.pathItem;
+      callbackMap[c.name] = inner;
+    }
+    // The OpenAPI type expects each path item to be a CallbackObject
+    // (which mirrors PathItemObject); we treat developer-supplied
+    // definitions as loosely typed paths and rely on the runtime
+    // shape being correct.
+    (operation as Record<string, unknown>).callbacks = callbackMap;
+  }
+
   return operation as OpenAPIV3.OperationObject;
 }
 
@@ -425,9 +601,19 @@ export function generatePaths(controllers: Function[]): OpenAPIV3.PathsObject {
       continue;
     }
 
+    // Skip the whole controller if @ApiExcludeController() is set
+    if (metadataStorage.isControllerExcluded(controller)) {
+      continue;
+    }
+
     const methods = metadataStorage.getMethodsForController(controller);
 
     for (const method of methods) {
+      // Skip this method if @ApiExcludeEndpoint() is set
+      if (metadataStorage.isMethodExcluded(method.controllerTarget, method.methodName)) {
+        continue;
+      }
+
       const fullPath = buildFullPath(controllerMeta.basePath, method.path);
       const pathKey = httpMethodToPathKey[method.httpMethod];
 
@@ -446,6 +632,30 @@ export function generatePaths(controllers: Function[]): OpenAPIV3.PathsObject {
 }
 
 /**
+ * Build the schema for a primitive parameter (query/path/header) — 3.1 variant.
+ */
+function buildPrimitiveParameterSchemaV31(
+  type: Function,
+  format: string | undefined,
+  enumValues: unknown[] | undefined,
+  defaultValue: unknown
+): OpenAPIV3_1.SchemaObject {
+  const schema: OpenAPIV3_1.SchemaObject = {
+    type: getPrimitiveTypeName(type),
+  };
+  if (format) {
+    schema.format = format;
+  }
+  if (enumValues && enumValues.length > 0) {
+    schema.enum = enumValues;
+  }
+  if (defaultValue !== undefined) {
+    schema.default = defaultValue;
+  }
+  return schema;
+}
+
+/**
  * Generate query parameters for OpenAPI 3.1.0
  */
 function generateQueryParametersV31(target: Function, methodName: string): ParameterObjectV31[] {
@@ -456,9 +666,12 @@ function generateQueryParametersV31(target: Function, methodName: string): Param
       name: param.name,
       in: 'query',
       required: param.required ?? false,
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchemaV31(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -467,6 +680,10 @@ function generateQueryParametersV31(target: Function, methodName: string): Param
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -484,9 +701,12 @@ function generatePathParametersV31(target: Function, methodName: string): Parame
       name: param.name,
       in: 'path',
       required: true, // Path parameters are always required
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchemaV31(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -495,6 +715,51 @@ function generatePathParametersV31(target: Function, methodName: string): Parame
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
+    }
+
+    return parameter;
+  });
+}
+
+/**
+ * Generate header parameters for a method (V3.1).
+ */
+function generateHeaderParametersV31(
+  controller: Function,
+  target: Function,
+  methodName: string
+): ParameterObjectV31[] {
+  const methodHeaders = metadataStorage.getHeaderParamsForMethod(target, methodName);
+  const controllerHeaders = metadataStorage.getHeaderParamsForController(controller);
+  const all = [...controllerHeaders, ...methodHeaders];
+
+  return all.map((param): ParameterObjectV31 => {
+    const parameter: ParameterObjectV31 = {
+      name: param.name,
+      in: 'header',
+      required: param.required ?? false,
+      schema: buildPrimitiveParameterSchemaV31(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
+    };
+
+    if (param.description) {
+      parameter.description = param.description;
+    }
+
+    if (param.example !== undefined) {
+      parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -606,6 +871,8 @@ function generateRequestBodyV31(target: Function, methodName: string): RequestBo
 function generateResponsesV31(target: Function, methodName: string): OpenAPIV3_1.ResponsesObject {
   const responses: OpenAPIV3_1.ResponsesObject = {};
   const responseMetadataList = metadataStorage.getResponsesForMethod(target, methodName);
+  const produces = metadataStorage.getProducesForMethod(target, methodName);
+  const contentTypes = produces?.contentTypes ?? ['application/json'];
 
   for (const responseMeta of responseMetadataList) {
     const response: ResponseObjectV31 = {
@@ -625,11 +892,45 @@ function generateResponsesV31(target: Function, methodName: string): OpenAPIV3_1
         schema = schemaForTypeV31(responseMeta.type);
       }
 
-      response.content = {
-        'application/json': {
-          schema,
-        },
-      };
+      const content: Record<string, { schema: typeof schema }> = {};
+      for (const ct of contentTypes) {
+        content[ct] = { schema };
+      }
+      response.content = content;
+    }
+
+    // Attach response headers
+    const headers = metadataStorage.getResponseHeadersForMethod(
+      target,
+      methodName,
+      responseMeta.status
+    );
+    if (headers && Object.keys(headers).length > 0) {
+      const headerMap: Record<string, OpenAPIV3_1.HeaderObject> = {};
+      for (const [name, def] of Object.entries(headers)) {
+        const h: OpenAPIV3_1.HeaderObject = {};
+        if (def.description !== undefined) h.description = def.description;
+        if (def.required !== undefined) h.required = def.required;
+        if (def.schema !== undefined) h.schema = def.schema as OpenAPIV3_1.SchemaObject;
+        headerMap[name] = h;
+      }
+      response.headers = headerMap;
+    }
+
+    // Attach @ApiLink definitions
+    const links = metadataStorage.getLinksForMethod(target, methodName);
+    if (links.length > 0 && !response.links) {
+      const linkMap: Record<string, OpenAPIV3_1.LinkObject> = {};
+      for (const link of links) {
+        const linkObj: OpenAPIV3_1.LinkObject = {
+          operationId: `${link.fromType.name}_${link.fromField}`,
+          parameters: {
+            [link.routeParam]: `$response.body#/${link.fromField}`,
+          },
+        };
+        linkMap[link.fromType.name] = linkObj;
+      }
+      response.links = linkMap;
     }
 
     responses[responseMeta.status.toString()] = response;
@@ -672,6 +973,13 @@ function generateSecurityRequirementsV31(
     return undefined;
   }
 
+  // @Public() stores schemes: [] to signal "no security required". Skip
+  // emitting `security: [{}]` (which Swagger UI renders as "anonymous only")
+  // and return undefined so the operation inherits no security block.
+  if (effectiveSecurity.every((r) => r.schemes.length === 0)) {
+    return undefined;
+  }
+
   // Convert to OpenAPI format
   const security: OpenAPIV3_1.SecurityRequirementObject[] = effectiveSecurity.map(req => {
     const requirement: OpenAPIV3_1.SecurityRequirementObject = {};
@@ -695,17 +1003,22 @@ function generateOperationV31(
     operationId: `${controller.name}_${method.methodName}`,
   };
 
-  // Add tags from controller
-  const tags = metadataStorage.getTagsForController(controller);
-  if (tags.length > 0) {
-    operation.tags = tags;
-  }
-
-  // Add operation metadata
-  const operationMeta = metadataStorage.getOperationForMethod(
+  // Add tags from controller (unless overridden at method level)
+  const operationMetaForTags = metadataStorage.getOperationForMethod(
     method.controllerTarget,
     method.methodName
   );
+  if (operationMetaForTags?.tags !== undefined) {
+    operation.tags = operationMetaForTags.tags;
+  } else {
+    const tags = metadataStorage.getTagsForController(controller);
+    if (tags.length > 0) {
+      operation.tags = tags;
+    }
+  }
+
+  // Add operation metadata
+  const operationMeta = operationMetaForTags;
 
   if (operationMeta) {
     operation.summary = operationMeta.summary;
@@ -720,10 +1033,11 @@ function generateOperationV31(
     }
   }
 
-  // Add parameters (query and path)
+  // Add parameters (query, path, header)
   const parameters: ParameterObjectV31[] = [
     ...generateQueryParametersV31(method.controllerTarget, method.methodName),
     ...generatePathParametersV31(method.controllerTarget, method.methodName),
+    ...generateHeaderParametersV31(controller, method.controllerTarget, method.methodName),
   ];
 
   if (parameters.length > 0) {
@@ -755,6 +1069,30 @@ function generateOperationV31(
     operation.security = security;
   }
 
+  // Apply OpenAPI "x-*" extensions
+  const extensions = metadataStorage.getExtensionsForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  for (const [key, value] of Object.entries(extensions)) {
+    (operation as Record<string, unknown>)[key] = value;
+  }
+
+  // Attach @ApiCallback / @ApiCallbacks definitions
+  const callbacks = metadataStorage.getCallbacksForMethod(
+    method.controllerTarget,
+    method.methodName
+  );
+  if (callbacks.length > 0) {
+    const callbackMap: Record<string, Record<string, unknown>> = {};
+    for (const c of callbacks) {
+      const inner = callbackMap[c.name] ?? {};
+      inner[c.expression] = c.pathItem;
+      callbackMap[c.name] = inner;
+    }
+    (operation as Record<string, unknown>).callbacks = callbackMap;
+  }
+
   return operation as OperationObjectV31;
 }
 
@@ -770,9 +1108,17 @@ export function generatePathsV31(controllers: Function[]): PathsObjectV31 {
       continue;
     }
 
+    if (metadataStorage.isControllerExcluded(controller)) {
+      continue;
+    }
+
     const methods = metadataStorage.getMethodsForController(controller);
 
     for (const method of methods) {
+      if (metadataStorage.isMethodExcluded(method.controllerTarget, method.methodName)) {
+        continue;
+      }
+
       const fullPath = buildFullPath(controllerMeta.basePath, method.path);
       const pathKey = httpMethodToPathKey[method.httpMethod];
 

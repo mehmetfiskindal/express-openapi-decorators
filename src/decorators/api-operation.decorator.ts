@@ -25,6 +25,13 @@ export interface ApiOperationOptions {
    * @default false
    */
   deprecated?: boolean;
+
+  /**
+   * Override the controller-level tags for this operation.
+   * When provided, the controller's @ApiTags are ignored and only
+   * the tags listed here are emitted on the operation.
+   */
+  tags?: string[];
 }
 
 /**
@@ -52,6 +59,7 @@ export function ApiOperation(options: ApiOperationOptions): MethodDecorator {
       description: options.description,
       operationId: options.operationId,
       deprecated: options.deprecated ?? false,
+      tags: options.tags,
     };
 
     metadataStorage.addOperation(metadata);
@@ -111,6 +119,7 @@ export function Description(description: string): MethodDecorator {
         description: description,
         operationId: undefined,
         deprecated: false,
+        tags: undefined,
       };
       metadataStorage.addOperation(metadata);
     }

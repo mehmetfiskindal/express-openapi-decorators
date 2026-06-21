@@ -48,6 +48,7 @@ export interface ApiOperationMetadata {
   description: string | undefined;
   operationId: string | undefined;
   deprecated: boolean;
+  tags: string[] | undefined;
 }
 
 /**
@@ -84,6 +85,10 @@ export interface ApiQueryMetadata {
   required: boolean;
   description: string | undefined;
   example: unknown;
+  format: string | undefined;
+  enum: unknown[] | undefined;
+  default: unknown;
+  deprecated: boolean;
 }
 
 /**
@@ -97,6 +102,29 @@ export interface ApiParamMetadata {
   required: boolean;
   description: string | undefined;
   example: unknown;
+  format: string | undefined;
+  enum: unknown[] | undefined;
+  default: unknown;
+  deprecated: boolean;
+}
+
+/**
+ * Metadata for @ApiHeader decorator
+ * Mirrors the shape of @ApiQuery but with the `in` field fixed to 'header'.
+ * `methodName` is `undefined` for controller-level headers.
+ */
+export interface ApiHeaderMetadata {
+  target: Function;
+  methodName: string | undefined;
+  name: string;
+  type: Function;
+  required: boolean;
+  description: string | undefined;
+  example: unknown;
+  format: string | undefined;
+  enum: unknown[] | undefined;
+  default: unknown;
+  deprecated: boolean;
 }
 
 /**
@@ -113,6 +141,14 @@ export interface ApiPropertyMetadata {
   format: string | undefined;
   default: unknown;
   isArray: boolean;
+  readOnly: boolean;
+  writeOnly: boolean;
+  deprecated: boolean;
+  hidden: boolean;
+  oneOf: Function[] | undefined;
+  anyOf: Function[] | undefined;
+  allOf: Function[] | undefined;
+  discriminator: { propertyName: string; mapping?: Record<string, string> } | undefined;
 }
 
 /**
@@ -188,6 +224,90 @@ export interface ApiConsumesMetadata {
   target: Function;
   methodName: string;
   contentTypes: string[];
+}
+
+/**
+ * Metadata for response content type (@ApiProduces)
+ * Mirrors ApiConsumesMetadata; the runtime effect is the same — the
+ * OpenAPI generator writes the given content type into each response's
+ * `content` map (or merges them when more than one is declared).
+ */
+export interface ApiProducesMetadata {
+  target: Function;
+  methodName: string;
+  contentTypes: string[];
+}
+
+/**
+ * Metadata for @ApiExcludeEndpoint / @ApiExcludeController
+ * When present, the path generator skips emitting paths for the target.
+ */
+export interface ApiExcludeMetadata {
+  target: Function;
+  methodName?: string; // undefined for controller-level exclusion
+  exclude: boolean;
+}
+
+/**
+ * Metadata for OpenAPI "x-*" extension (@ApiExtension)
+ */
+export interface ApiExtensionMetadata {
+  target: Function;
+  methodName?: string; // undefined for controller-level
+  key: string;
+  value: unknown;
+}
+
+/**
+ * Metadata for @ApiSchema — override the schema name used in
+ * `components.schemas` for a DTO class.
+ */
+export interface ApiSchemaMetadata {
+  target: Function;
+  name: string;
+}
+
+/**
+ * Metadata for @ApiCallback / @ApiCallbacks
+ * Stores the named callback path-item objects that are attached to an
+ * operation's `callbacks` field.
+ */
+export interface ApiCallbackMetadata {
+  target: Function;
+  methodName: string;
+  name: string;
+  expression: string; // e.g. '{$request.query.url}'
+  pathItem: Record<string, unknown>; // path-item-like shape
+}
+
+/**
+ * Metadata for response headers on @ApiResponse
+ * Maps a header name to its header object (description/schema/etc).
+ */
+export interface ApiResponseHeaderMetadata {
+  target: Function;
+  methodName: string;
+  status: number;
+  headers: Record<string, ApiResponseHeaderDefinition>;
+}
+
+export interface ApiResponseHeaderDefinition {
+  description?: string;
+  required?: boolean;
+  schema?: { type?: string; format?: string; [k: string]: unknown };
+}
+
+/**
+ * Metadata for @ApiLink
+ * Reference to a target DTO whose `fromField` is the id used to
+ * construct a link into the decorated operation.
+ */
+export interface ApiLinkMetadata {
+  target: Function;
+  methodName: string;
+  fromType: Function;
+  fromField: string;
+  routeParam: string;
 }
 
 /**

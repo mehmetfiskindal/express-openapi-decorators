@@ -10,12 +10,21 @@ export type {
   ApiBodyMetadata,
   ApiQueryMetadata,
   ApiParamMetadata,
+  ApiHeaderMetadata,
   ApiPropertyMetadata,
   ApiTagsMetadata,
   SecuritySchemeMetadata,
   ApiSecurityMetadata,
   ApiFileMetadata,
   ApiConsumesMetadata,
+  ApiProducesMetadata,
+  ApiExcludeMetadata,
+  ApiExtensionMetadata,
+  ApiSchemaMetadata,
+  ApiCallbackMetadata,
+  ApiResponseHeaderMetadata,
+  ApiResponseHeaderDefinition,
+  ApiLinkMetadata,
   MiddlewareMetadata,
   MiddlewareFunction,
   MiddlewareReference,
@@ -40,7 +49,12 @@ export { ApiQuery } from './decorators/api-query.decorator.js';
 export type { ApiQueryOptions } from './decorators/api-query.decorator.js';
 export { ApiParam } from './decorators/api-param.decorator.js';
 export type { ApiParamOptions } from './decorators/api-param.decorator.js';
-export { ApiProperty, ApiPropertyOptional } from './decorators/api-property.decorator.js';
+export {
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiResponseProperty,
+  ApiHideProperty,
+} from './decorators/api-property.decorator.js';
 export type { ApiPropertyOptions } from './decorators/api-property.decorator.js';
 
 // Decorators - Security
@@ -48,6 +62,7 @@ export {
   ApiBearerAuth,
   ApiBasicAuth,
   ApiApiKey,
+  ApiCookieAuth,
   ApiOAuth2,
   ApiOpenIdConnect,
   ApiSecurity,
@@ -61,17 +76,58 @@ export type {
   OpenIdConnectOptions,
 } from './decorators/api-security.decorator.js';
 
+// Decorators - Header
+export {
+  ApiHeader,
+  ApiHeaders,
+} from './decorators/api-header.decorator.js';
+export type {
+  ApiHeaderOptions,
+} from './decorators/api-header.decorator.js';
+
 // Decorators - File Upload
 export {
   ApiFile,
   ApiFiles,
   ApiConsumes,
+  ApiProduces,
   ApiFormData,
 } from './decorators/api-file.decorator.js';
 export type {
   ApiFileOptions,
   ApiFilesOptions,
 } from './decorators/api-file.decorator.js';
+
+// Decorators - OpenAPI extensions
+export { ApiExtension } from './decorators/api-extension.decorator.js';
+
+// Decorators - Exclusion
+export {
+  ApiExcludeEndpoint,
+  ApiExcludeController,
+} from './decorators/api-exclude.decorator.js';
+
+// Decorators - Extra models
+export { ApiExtraModels } from './decorators/api-extra-models.decorator.js';
+
+// Decorators - Schema override
+export { ApiSchema } from './decorators/api-schema.decorator.js';
+
+// Decorators - Callbacks
+export { ApiCallback, ApiCallbacks } from './decorators/api-callback.decorator.js';
+export type { ApiCallbackDefinition } from './decorators/api-callback.decorator.js';
+
+// Decorators - Links
+export { ApiLink, ApiDefaultGetter } from './decorators/api-link.decorator.js';
+export type { ApiLinkOptions } from './decorators/api-link.decorator.js';
+
+// Discovery
+export { loadControllers } from './discovery/load-controllers.js';
+export type { LoadControllersOptions } from './discovery/load-controllers.js';
+
+// Swagger UI helper
+export { setupSwaggerUI } from './swagger-ui.js';
+export type { SetupSwaggerUIOptions } from './swagger-ui.js';
 
 // Decorators - Middleware
 export { Use, Middleware } from './decorators/middleware.decorator.js';
