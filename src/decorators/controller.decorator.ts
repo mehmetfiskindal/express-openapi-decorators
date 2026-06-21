@@ -14,24 +14,29 @@ export interface ControllerOptions {
 
 /**
  * Controller decorator - marks a class as an API controller
- * 
+ *
  * @example
  * ```typescript
  * @Controller('/users')
  * export class UserController {
  *   // routes...
  * }
+ *
+ * // Argument-less form: defaults to base path '/'
+ * @Controller
+ * export class RootController {}
  * ```
  */
 export function Controller(path: string): ClassDecorator;
-export function Controller(options: ControllerOptions): ClassDecorator;
+export function Controller(options?: ControllerOptions): ClassDecorator;
 export function Controller(
-  pathOrOptions: string | ControllerOptions
+  pathOrOptions?: string | ControllerOptions
 ): ClassDecorator {
   return (target) => {
-    const path = typeof pathOrOptions === 'string' 
-      ? pathOrOptions 
-      : (pathOrOptions.path ?? '/');
+    const path =
+      typeof pathOrOptions === 'string'
+        ? pathOrOptions
+        : (pathOrOptions?.path ?? '/');
 
     const metadata: ControllerMetadata = {
       target: target as unknown as Function,

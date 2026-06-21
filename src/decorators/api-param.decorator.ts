@@ -31,6 +31,27 @@ export interface ApiParamOptions {
    * Example value
    */
   example?: unknown;
+
+  /**
+   * OpenAPI format hint (e.g. 'uuid')
+   */
+  format?: string;
+
+  /**
+   * Allowed values for enum-style path parameters
+   */
+  enum?: unknown[];
+
+  /**
+   * Default value
+   */
+  default?: unknown;
+
+  /**
+   * Mark the parameter as deprecated in the OpenAPI document
+   * @default false
+   */
+  deprecated?: boolean;
 }
 
 /**
@@ -62,6 +83,10 @@ export function ApiParam(options: ApiParamOptions): MethodDecorator {
       required: options.required ?? true,
       description: options.description,
       example: options.example,
+      format: options.format,
+      enum: options.enum,
+      default: options.default,
+      deprecated: options.deprecated ?? false,
     };
 
     metadataStorage.addPathParam(metadata);

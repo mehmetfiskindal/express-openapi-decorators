@@ -30,6 +30,27 @@ export interface ApiQueryOptions {
    * Example value
    */
   example?: unknown;
+
+  /**
+   * OpenAPI format hint (e.g. 'email', 'uuid', 'date-time')
+   */
+  format?: string;
+
+  /**
+   * Allowed values for enum-style query parameters
+   */
+  enum?: unknown[];
+
+  /**
+   * Default value if the query parameter is omitted
+   */
+  default?: unknown;
+
+  /**
+   * Mark the parameter as deprecated in the OpenAPI document
+   * @default false
+   */
+  deprecated?: boolean;
 }
 
 /**
@@ -68,6 +89,10 @@ export function ApiQuery(options: ApiQueryOptions): MethodDecorator {
       required: options.required ?? false,
       description: options.description,
       example: options.example,
+      format: options.format,
+      enum: options.enum,
+      default: options.default,
+      deprecated: options.deprecated ?? false,
     };
 
     metadataStorage.addQueryParam(metadata);

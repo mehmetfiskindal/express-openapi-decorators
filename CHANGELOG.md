@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-06-21
+
+### Fixed
+- Multiple `@ApiTags` on the same controller are now merged into a single tag list instead of being overwritten by the first declaration.
+- `metadataStorage.clear()` now also clears the module-level schema cache, preventing stale schemas from being served across `createOpenApiDocument` calls (notably in test setups).
+- `@Public()` no longer emits an empty `security: [{}]` block on operations; the security requirement is now correctly omitted so Swagger UI does not render the operation as "anonymous only".
+- Duplicate security requirements (e.g. applying `@ApiBearerAuth()` twice to the same route) are now deduplicated.
+- Properties declared as `Type[]` without an explicit `type` in `@ApiProperty` no longer produce an invalid `{ type: 'array' }` schema (without `items`); the schema generator now falls back to an open array schema.
+- Async route handlers registered through `ExpressAdapter` now have their rejections forwarded to Express' error pipeline (Express 4 compatibility).
+- `@Controller()` called without arguments no longer crashes with a `Cannot read properties of undefined` error; it now defaults to base path `/`.
+- Non-primitive types (DTO classes) used in `@ApiParam` / `@ApiQuery` now produce a `string` parameter with a developer-facing warning instead of an invalid `$ref` schema.
+- `@ApiQuery` and `@ApiParam` now support `format`, `enum`, `default` and `deprecated` options; previously these were silently dropped from the generated document.
+- Empty DTOs no longer emit a useless `required: []` field in the generated schema.
+
+### Added
+- `@ApiQuery` and `@ApiParam` options: `format`, `enum`, `default`, `deprecated`.
+
 ## [2.1.1] - 2026-05-12
 
 ### Fixed
@@ -47,4 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request body schema generation
 
 [2.1.1]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.1.1
+[2.1.2]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.1.2
 [0.1.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v0.1.0

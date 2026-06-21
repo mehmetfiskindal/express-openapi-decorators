@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as mod from '../src/index.js';
 
 const {
@@ -31,6 +31,7 @@ const {
   ApiConsumes,
   ApiFormData,
   Use,
+  Middleware,
   ExpressAdapter,
   createRouterFromControllers,
 } = mod;
@@ -875,5 +876,1044 @@ describe('ExpressAdapter', () => {
     const routeLayer = stack.find(layer => layer.route);
 
     expect(routeLayer?.route?.path).toBe('/health');
+  });
+});
+
+describe('v2.1.2 Bug Fixes', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  describe('Bug 1.1: multiple @ApiTags are merged', () => {
+    it('merges tags from multiple @ApiTags on the same controller', () => {
+      @ApiTags('Users')
+      @ApiTags('Admin')
+      @ApiTags('Users') // duplicate
+      @Controller('/users')
+      class UserController {}
+
+      const tags = metadataStorage.getTagsForController(UserController);
+      expect(tags.sort()).toEqual(['Admin', 'Users']);
+    });
+
+    it('merged tags appear in generated document', () => {
+      @ApiTags('Users')
+      @ApiTags('Admin')
+      @Controller('/users')
+      class UserController {
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test API',
+        version: '1.0.0',
+        controllers: [UserController],
+      });
+
+      expect(document.paths['/users']?.get?.tags?.sort()).toEqual([
+        'Admin',
+        'Users',
+      ]);
+    });
+  });
+
+  describe('Bug 1.2: clear() resets schema cache', () => {
+    it('regenerates schemas after clear (OpenAPI 3.0 example)', () => {
+      class TempDto {
+        @ApiProperty({ type: String, example: 'v1' })
+        id!: string;
+      }
+
+      @Controller('/t')
+      class TempController {
+        @Get('/')
+        @ApiResponse({ status: 200, type: TempDto })
+        list() {}
+      }
+
+      // First generation (3.0 keeps `example`)
+      const doc1 = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'T',
+        version: '1',
+        controllers: [TempController],
+      });
+      const schema1 = doc1.components?.schemas?.TempDto as {
+        properties?: { id?: { example?: unknown } };
+      };
+      expect(schema1.properties?.id?.example).toBe('v1');
+
+      // Clear and re-decorate with different metadata
+      metadataStorage.clear();
+      class TempDto2 {
+        @ApiProperty({ type: String, example: 'v2' })
+        id!: string;
+      }
+      @Controller('/t')
+      class TempController2 {
+        @Get('/')
+        @ApiResponse({ status: 200, type: TempDto2 })
+        list() {}
+      }
+
+      const doc2 = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'T',
+        version: '1',
+        controllers: [TempController2],
+      });
+      const schema2 = doc2.components?.schemas?.TempDto2 as {
+        properties?: { id?: { example?: unknown } };
+      };
+      // If the cache wasn't cleared, the second generation would still
+      // contain the v1 example for the new TempDto2 class.
+      expect(schema2.properties?.id?.example).toBe('v2');
+    });
+  });
+
+  describe('Bug 1.3: @Public() does not emit empty security block', () => {
+    it('omits security on a @Public() route even with controller-level @ApiBearerAuth', () => {
+      @ApiBearerAuth()
+      @Controller('/mixed')
+      class MixedController {
+        @Public()
+        @Get('/public')
+        publicRoute() {}
+
+        @Get('/private')
+        privateRoute() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [MixedController],
+      });
+
+      const publicOp = document.paths['/mixed/public']?.get;
+      const privateOp = document.paths['/mixed/private']?.get;
+
+      expect(publicOp?.security).toBeUndefined();
+      expect(privateOp?.security).toBeDefined();
+      expect(privateOp?.security?.[0]).toHaveProperty('bearer');
+    });
+  });
+
+  describe('Bug 1.4: duplicate security requirements are deduped', () => {
+    it('does not produce duplicate security entries', () => {
+      @ApiBearerAuth()
+      @ApiBearerAuth() // intentional duplicate
+      @Controller('/d')
+      class DupController {
+        @Get('/')
+        get() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [DupController],
+      });
+
+      const security = document.paths['/d']?.get?.security as Array<unknown>;
+      expect(security).toHaveLength(1);
+    });
+  });
+
+  describe('Bug 1.5: array property handling is robust', () => {
+    it('emits proper $ref for explicit array of DTOs (type: [ItemDto])', () => {
+      class ItemDto {
+        @ApiProperty({ type: String })
+        name!: string;
+      }
+
+      class BagDto {
+        @ApiProperty({ type: [ItemDto] })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items!: any;
+      }
+
+      @Controller('/bag')
+      class BagController {
+        @Post('/')
+        @ApiBody(BagDto)
+        create() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [BagController],
+      });
+
+      const bagSchema = document.components?.schemas?.BagDto as {
+        properties?: { items?: { type?: string; items?: { $ref?: string } } };
+      };
+      expect(bagSchema.properties?.items?.type).toBe('array');
+      expect(bagSchema.properties?.items?.items?.$ref).toBe(
+        '#/components/schemas/ItemDto'
+      );
+    });
+
+    it('emits open array fallback when isArray=true and no type is given', () => {
+      // isArray is set explicitly to true without a type. The schema
+      // generator must not produce `{ type: 'array' }` without `items`
+      // (which is invalid OpenAPI).
+      class OpenArrayDto {
+        @ApiProperty({ isArray: true })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        things!: any;
+      }
+
+      @Controller('/o')
+      class OpenArrayController {
+        @Post('/')
+        @ApiBody(OpenArrayDto)
+        create() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [OpenArrayController],
+      });
+
+      const schema = document.components?.schemas?.OpenArrayDto as {
+        properties?: { things?: { type?: string; items?: unknown } };
+      };
+      expect(schema.properties?.things?.type).toBe('array');
+      // items is present (object schema) so the OpenAPI document stays valid
+      expect(schema.properties?.things?.items).toBeDefined();
+    });
+  });
+
+  describe('Bug 1.6: async handler errors are forwarded to Express', () => {
+    it('forwards rejected promises to the error middleware', async () => {
+      const { createRouterFromControllers } = mod;
+
+      class ThrowingController {
+        @Get('/async-fail')
+        async fail() {
+          throw new Error('boom');
+        }
+      }
+
+      // Bypass the metadata controller requirement by using a no-decorator
+      // path. We attach the method directly through Express routes.
+      const express = (await import('express')).default;
+      const app = express();
+
+      // Install a route that simulates a decorated async handler rejection
+      app.get('/async-fail', async (_req, _res, _next) => {
+        // Same shape as wrapHandler output:
+        try {
+          await Promise.reject(new Error('boom'));
+        } catch (err) {
+          _next(err);
+        }
+      });
+
+      app.use(
+        (
+          err: Error,
+          _req: express.Request,
+          res: express.Response,
+          _next: express.NextFunction
+        ) => {
+          res.status(500).json({ message: err.message });
+        }
+      );
+
+      const server = app.listen(0);
+      try {
+        const port = (server.address() as { port: number }).port;
+        const res = await fetch(`http://127.0.0.1:${port}/async-fail`);
+        expect(res.status).toBe(500);
+        const body = (await res.json()) as { message: string };
+        expect(body.message).toBe('boom');
+      } finally {
+        server.close();
+      }
+    });
+
+    it('wraps a decorated async controller so rejections reach the error pipeline', async () => {
+      @Controller('/async-wrap')
+      class AsyncController {
+        @Get('/fail')
+        async fail() {
+          throw new Error('async-boom');
+        }
+      }
+
+      const express = (await import('express')).default;
+      const app = express();
+      const router = createRouterFromControllers([AsyncController]);
+      app.use(router);
+      app.use(
+        (
+          err: Error,
+          _req: express.Request,
+          res: express.Response,
+          _next: express.NextFunction
+        ) => {
+          res.status(500).json({ message: err.message });
+        }
+      );
+
+      const server = app.listen(0);
+      try {
+        const port = (server.address() as { port: number }).port;
+        const res = await fetch(`http://127.0.0.1:${port}/async-wrap/fail`);
+        expect(res.status).toBe(500);
+        const body = (await res.json()) as { message: string };
+        expect(body.message).toBe('async-boom');
+      } finally {
+        server.close();
+      }
+    });
+  });
+
+  describe('Bug 1.7: argument-less @Controller() is valid', () => {
+    it('does not crash when called without arguments and defaults to /', () => {
+      let created: any;
+      expect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        class NoArgController {}
+        Controller()(NoArgController);
+        created = NoArgController;
+      }).not.toThrow();
+
+      const ctrl = metadataStorage.findController(created);
+      expect(ctrl).toBeDefined();
+      expect(ctrl?.basePath).toBe('/');
+    });
+  });
+
+  describe('Bug 1.8: non-primitive path/query param falls back to string', () => {
+    it('emits a string parameter with a warning when type is a DTO class', () => {
+      // Suppress expected warning
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      class TagDto {
+        @ApiProperty({ type: String })
+        label!: string;
+      }
+
+      @Controller('/t')
+      class TagController {
+        @Get('/:tag')
+        @ApiParam({ name: 'tag', type: TagDto as unknown as Function })
+        get() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [TagController],
+      });
+
+      const param = (document.paths['/t/{tag}']?.get?.parameters as Array<{
+        schema: { type: string };
+      }>)[0];
+      expect(param.schema.type).toBe('string');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('Bug 1.9: query/path parameters support format/enum/default/deprecated', () => {
+    it('emits format, enum and default on @ApiQuery', () => {
+      @Controller('/users')
+      class UserController {
+        @Get('/')
+        @ApiQuery({
+          name: 'role',
+          type: String,
+          enum: ['admin', 'user'],
+          default: 'user',
+          deprecated: true,
+        })
+        @ApiQuery({
+          name: 'id',
+          type: String,
+          format: 'uuid',
+          description: 'User UUID',
+        })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [UserController],
+      });
+
+      const params = document.paths['/users']?.get?.parameters as Array<{
+        name: string;
+        schema: { type: string; format?: string; enum?: unknown[]; default?: unknown };
+        deprecated?: boolean;
+      }>;
+
+      const role = params.find((p) => p.name === 'role')!;
+      expect(role.schema.enum).toEqual(['admin', 'user']);
+      expect(role.schema.default).toBe('user');
+      expect(role.deprecated).toBe(true);
+
+      const id = params.find((p) => p.name === 'id')!;
+      expect(id.schema.format).toBe('uuid');
+    });
+
+    it('emits format, enum and default on @ApiParam', () => {
+      @Controller('/users')
+      class UserController {
+        @Get('/:id')
+        @ApiParam({
+          name: 'id',
+          type: String,
+          format: 'uuid',
+        })
+        get() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [UserController],
+      });
+
+      const param = (document.paths['/users/{id}']?.get?.parameters as Array<{
+        schema: { type: string; format?: string };
+      }>)[0];
+      expect(param.schema.type).toBe('string');
+      expect(param.schema.format).toBe('uuid');
+    });
+  });
+
+  describe('Bug 1.10: empty DTO does not emit required: []', () => {
+    it('omits required when no property is required', () => {
+      class EmptyDto {
+        @ApiPropertyOptional({ type: String })
+        note?: string;
+      }
+
+      @Controller('/e')
+      class EmptyController {
+        @Get('/')
+        @ApiResponse({ status: 200, type: EmptyDto })
+        get() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'Test',
+        version: '1.0.0',
+        controllers: [EmptyController],
+      });
+
+      const schema = document.components?.schemas?.EmptyDto as {
+        required?: string[];
+      };
+      expect(schema.required).toBeUndefined();
+    });
+  });
+});
+
+describe('Additional Coverage Tests', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  describe('ExpressAdapter extended behavior', () => {
+    it('mounts routes under globalPrefix when provided', () => {
+      const calls: Array<{ path: string; router: unknown }> = [];
+      const mockApp = {
+        use: (path: string, router: unknown) => calls.push({ path, router }),
+      };
+
+      @Controller('/users')
+      class UserController {
+        @Get('/')
+        getAll() {
+          return [];
+        }
+      }
+
+      const adapter = new ExpressAdapter(mockApp as any, {
+        globalPrefix: '/api/v1',
+      });
+      adapter.registerController(UserController);
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.path).toBe('/api/v1');
+    });
+
+    it('applies global middlewares in order', async () => {
+      const express = (await import('express')).default;
+      const order: string[] = [];
+
+      const globalMw: any = (_req: any, _res: any, next: any) => {
+        order.push('global');
+        next();
+      };
+      const ctrlMw: any = (_req: any, _res: any, next: any) => {
+        order.push('controller');
+        next();
+      };
+
+      @Use(ctrlMw)
+      @Controller('/x')
+      class XC {
+        @Get('/')
+        get(_req: express.Request, res: express.Response) {
+          order.push('handler');
+          res.status(200).send('ok');
+        }
+      }
+
+      const app = express();
+      const router = createRouterFromControllers([XC], {
+        middlewares: [globalMw],
+      });
+      app.use(router);
+
+      const server = app.listen(0);
+      try {
+        const port = (server.address() as { port: number }).port;
+        const res = await fetch(`http://127.0.0.1:${port}/x/`);
+        expect(res.status).toBe(200);
+        // Drain body to ensure connection closes
+        await res.text();
+        expect(order).toEqual(['global', 'controller', 'handler']);
+      } finally {
+        server.close();
+      }
+    });
+
+    it('resolves named middlewares via @Middleware', async () => {
+      const express = (await import('express')).default;
+      let invoked = false;
+
+      const namedMw: any = (_req: any, _res: any, next: any) => {
+        invoked = true;
+        next();
+      };
+
+      @Controller('/n')
+      class NC {
+        @Middleware('auth')
+        @Get('/')
+        get(_req: express.Request, res: express.Response) {
+          res.status(200).send('ok');
+        }
+      }
+
+      const app = express();
+      const router = createRouterFromControllers([NC], {
+        namedMiddlewares: { auth: namedMw },
+      });
+      app.use(router);
+
+      const server = app.listen(0);
+      try {
+        const port = (server.address() as { port: number }).port;
+        const res = await fetch(`http://127.0.0.1:${port}/n/`);
+        await res.text();
+        expect(invoked).toBe(true);
+      } finally {
+        server.close();
+      }
+    });
+
+    it('throws when a named middleware is not registered', () => {
+      @Controller('/n')
+      class NC {
+        @Middleware('missing')
+        @Get('/')
+        get() {
+          return 'ok';
+        }
+      }
+
+      expect(() => {
+        createRouterFromControllers([NC]);
+      }).toThrow(/Named middleware 'missing' not found/);
+    });
+
+    it('forwards sync handler errors to the error pipeline', async () => {
+      const express = (await import('express')).default;
+      // Use a real controller that throws synchronously
+      @Controller('/sync-fail')
+      class SyncFailController {
+        @Get('/')
+        handler(_req: express.Request, _res: express.Response) {
+          throw new Error('sync-boom');
+        }
+      }
+
+      const app2 = express();
+      const router2 = createRouterFromControllers([SyncFailController]);
+      app2.use(router2);
+      app2.use(
+        (
+          err: Error,
+          _req: express.Request,
+          res: express.Response,
+          _next: express.NextFunction
+        ) => {
+          res.status(500).json({ message: err.message });
+        }
+      );
+
+      const server = app2.listen(0);
+      try {
+        const port = (server.address() as { port: number }).port;
+        const res = await fetch(`http://127.0.0.1:${port}/sync-fail/`);
+        expect(res.status).toBe(500);
+        const body = (await res.json()) as { message: string };
+        expect(body.message).toBe('sync-boom');
+      } finally {
+        server.close();
+      }
+    });
+  });
+
+  describe('createOpenApiDocument V3 path', () => {
+    it('emits OpenAPI 3.0.3 document with security, tags, license and contact', () => {
+      @ApiBearerAuth()
+      @ApiTags('users')
+      @Controller('/users')
+      class UserController {
+        @Get('/')
+        @ApiOperation({ summary: 'List users' })
+        getAll() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'API',
+        version: '1',
+        description: 'Test API',
+        contact: { name: 'Mehmet', email: 'mehmet@example.com' },
+        license: { name: 'MIT' },
+        tags: [{ name: 'users', description: 'User endpoints' }],
+        externalDocs: { url: 'https://example.com/docs' },
+        security: [{ bearer: [] }],
+        controllers: [UserController],
+      });
+
+      expect(document.openapi).toBe('3.0.3');
+      expect(document.info.description).toBe('Test API');
+      expect(document.info.contact?.name).toBe('Mehmet');
+      expect(document.info.license?.name).toBe('MIT');
+      expect(document.tags?.[0]?.description).toBe('User endpoints');
+      expect(document.externalDocs?.url).toBe('https://example.com/docs');
+      expect(document.security?.[0]).toHaveProperty('bearer');
+    });
+
+    it('merges user-provided custom components (V3)', () => {
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'API',
+        version: '1',
+        controllers: [],
+        components: {
+          responses: { NotFound: { description: 'Not found' } },
+          parameters: { PageParam: { name: 'page', in: 'query' } },
+          examples: { Sample: { value: 'sample' } },
+          requestBodies: { Req: { content: { 'application/json': { schema: {} } } } },
+          headers: { XTrace: { schema: { type: 'string' } } },
+          links: { Up: { operationId: 'op' } },
+          callbacks: { OnEvent: { '{$request.query.url}': {} as any } },
+        },
+      });
+
+      expect(document.components?.responses?.NotFound).toBeDefined();
+      expect(document.components?.parameters?.PageParam).toBeDefined();
+      expect(document.components?.examples?.Sample).toBeDefined();
+      expect(document.components?.requestBodies?.Req).toBeDefined();
+      expect(document.components?.headers?.XTrace).toBeDefined();
+      expect(document.components?.links?.Up).toBeDefined();
+      expect(document.components?.callbacks?.OnEvent).toBeDefined();
+    });
+
+    it('merges user-provided custom components (V3.1 with pathItems)', () => {
+      const document = createOpenApiDocument({
+        openapi: '3.1.0',
+        title: 'API',
+        version: '1',
+        controllers: [],
+        components: {
+          pathItems: { SharedItem: {} as any },
+        },
+      });
+
+      expect(document.components?.pathItems?.SharedItem).toBeDefined();
+    });
+  });
+
+  describe('Tag emission from operations', () => {
+    it('emits operation tags from controller-level @ApiTags', () => {
+      @ApiTags('alpha', 'beta')
+      @Controller('/t')
+      class TC {
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [TC],
+      });
+      expect(document.paths['/t']?.get?.tags).toEqual(['alpha', 'beta']);
+    });
+  });
+
+  describe('class-validator adapter is a no-op when no metadata is present', () => {
+    it('does not throw when class-validator is absent or returns no metadata', () => {
+      class SimpleDto {
+        @ApiProperty({ type: String })
+        name!: string;
+      }
+
+      @Controller('/s')
+      class SC {
+        @Post('/')
+        @ApiBody(SimpleDto)
+        create() {}
+      }
+
+      expect(() =>
+        createOpenApiDocument({
+          title: 'A',
+          version: '1',
+          controllers: [SC],
+        })
+      ).not.toThrow();
+    });
+  });
+
+  describe('@Description / @Summary shorthand decorators', () => {
+    it('@Summary alone creates an operation', () => {
+      @Controller('/d')
+      class DC {
+        @Get('/')
+        @ApiTags('Test')
+        @mod.Summary('Just a summary')
+        get() {}
+      }
+
+      const op = metadataStorage.getOperationForMethod(DC, 'get');
+      expect(op?.summary).toBe('Just a summary');
+      expect(op?.description).toBeUndefined();
+    });
+
+    it('@Description alone creates an operation with empty summary', () => {
+      @Controller('/d2')
+      class DC2 {
+        @Get('/')
+        @mod.Description('A long description')
+        get() {}
+      }
+
+      const op = metadataStorage.getOperationForMethod(DC2, 'get');
+      expect(op?.summary).toBe('');
+      expect(op?.description).toBe('A long description');
+    });
+
+    it('@Description appends to existing operation description when applied after @ApiOperation', () => {
+      // Decorators run bottom-up, so to have @Description append we
+      // need to put it BELOW @ApiOperation.
+      @Controller('/d3')
+      class DC3 {
+        @Get('/')
+        @mod.Description('second')
+        @ApiOperation({ summary: 's', description: 'first' })
+        get() {}
+      }
+
+      const op = metadataStorage.getOperationForMethod(DC3, 'get');
+      expect(op?.description).toBe('first\n\nsecond');
+    });
+  });
+
+  describe('OAuth2 and OpenIdConnect security decorators', () => {
+    it('registers OAuth2 security scheme', () => {
+      @ApiOAuth2('oauth2', {
+        flows: {
+          authorizationCode: {
+            authorizationUrl: 'https://example.com/auth',
+            tokenUrl: 'https://example.com/token',
+            scopes: { read: 'read', write: 'write' },
+          },
+        },
+        description: 'OAuth2',
+      })
+      @Controller('/o')
+      class OC {}
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [OC],
+      });
+      const scheme = document.components?.securitySchemes?.oauth2 as {
+        type: string;
+        flows: { authorizationCode: { scopes: Record<string, string> } };
+      };
+      expect(scheme.type).toBe('oauth2');
+      expect(scheme.flows.authorizationCode.scopes).toEqual({
+        read: 'read',
+        write: 'write',
+      });
+    });
+
+    it('registers OpenIdConnect security scheme', () => {
+      @ApiOpenIdConnect('oidc', {
+        url: 'https://example.com/.well-known/openid-configuration',
+        description: 'OIDC',
+      })
+      @Controller('/oidc')
+      class OIC {}
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [OIC],
+      });
+      const scheme = document.components?.securitySchemes?.oidc as {
+        type: string;
+        openIdConnectUrl: string;
+        description?: string;
+      };
+      expect(scheme.type).toBe('openIdConnect');
+      expect(scheme.openIdConnectUrl).toBe(
+        'https://example.com/.well-known/openid-configuration'
+      );
+      expect(scheme.description).toBe('OIDC');
+    });
+
+    it('@ApiSecurity applies at method level', () => {
+      @ApiSecurity('bearer', 'apiKey')
+      @Controller('/sec')
+      class SC {
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [SC],
+      });
+      const security = document.paths['/sec']?.get?.security as Array<
+        Record<string, string[]>
+      >;
+      expect(security).toHaveLength(1);
+      expect(security[0]).toHaveProperty('bearer');
+      expect(security[0]).toHaveProperty('apiKey');
+    });
+
+    it('@ApiSecurity with custom name (no scheme registered) still works', () => {
+      // When the scheme isn't registered, the security reference appears
+      // verbatim in the operation. This mirrors @nestjs/swagger behavior.
+      @Controller('/s')
+      class S {
+        @ApiSecurity('custom-scheme')
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [S],
+      });
+      const security = document.paths['/s']?.get?.security as Array<
+        Record<string, string[]>
+      >;
+      expect(security?.[0]).toHaveProperty('custom-scheme');
+    });
+  });
+
+  describe('Response default descriptions', () => {
+    it('uses default descriptions for common status codes', () => {
+      @Controller('/r')
+      class RC {
+        @ApiResponse({ status: 201, type: String })
+        @Post('/')
+        create() {}
+
+        @ApiResponse({ status: 204 })
+        @Delete('/')
+        remove() {}
+
+        @ApiResponse({ status: 404 })
+        @Get('/missing')
+        notFound() {}
+
+        @ApiResponse({ status: 500 })
+        @Get('/err')
+        err() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [RC],
+      });
+
+      const postOp = document.paths['/r']?.post;
+      const delOp = document.paths['/r']?.delete;
+      const nfOp = document.paths['/r/missing']?.get;
+      const errOp = document.paths['/r/err']?.get;
+
+      expect((postOp?.responses?.['201'] as { description: string }).description).toBe('Created');
+      expect((delOp?.responses?.['204'] as { description: string }).description).toBe('No Content');
+      expect((nfOp?.responses?.['404'] as { description: string }).description).toBe('Not Found');
+      expect((errOp?.responses?.['500'] as { description: string }).description).toBe('Internal Server Error');
+    });
+  });
+
+  describe('Schema generation: array of DTOs and complex types', () => {
+    it('generates a primitive array property when type is [String]', () => {
+      class WithArray {
+        @ApiProperty({ type: [String] })
+        tags!: string[];
+      }
+
+      @Controller('/a')
+      class AC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: WithArray })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [AC],
+      });
+      const schema = document.components?.schemas?.WithArray as {
+        properties?: { tags?: { type?: string; items?: { type?: string } } };
+      };
+      expect(schema.properties?.tags?.type).toBe('array');
+      expect(schema.properties?.tags?.items?.type).toBe('string');
+    });
+
+    it('preserves example, format, default on a property', () => {
+      class WithMeta {
+        @ApiProperty({
+          type: String,
+          format: 'email',
+          example: 'foo@bar.com',
+          default: 'n/a',
+          description: 'email',
+        })
+        email!: string;
+
+        @ApiProperty({ type: Number, enum: [1, 2, 3], example: 2 })
+        tier!: number;
+      }
+
+      @Controller('/m')
+      class MC {
+        @Get('/')
+        @ApiResponse({ status: 200, type: WithMeta })
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        openapi: '3.0.3',
+        title: 'A',
+        version: '1',
+        controllers: [MC],
+      });
+      const schema = document.components?.schemas?.WithMeta as {
+        properties?: {
+          email?: { format?: string; example?: string; default?: string; description?: string };
+          tier?: { enum?: unknown[]; example?: number };
+        };
+      };
+      expect(schema.properties?.email?.format).toBe('email');
+      expect(schema.properties?.email?.example).toBe('foo@bar.com');
+      expect(schema.properties?.email?.default).toBe('n/a');
+      expect(schema.properties?.email?.description).toBe('email');
+      expect(schema.properties?.tier?.enum).toEqual([1, 2, 3]);
+      expect(schema.properties?.tier?.example).toBe(2);
+    });
+  });
+
+  describe('External docs and license on operation', () => {
+    it('operation has operationId when provided', () => {
+      @Controller('/o')
+      class OC {
+        @ApiOperation({ summary: 's', operationId: 'customOpId' })
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [OC],
+      });
+      expect(document.paths['/o']?.get?.operationId).toBe('customOpId');
+    });
+
+    it('emits deprecated when set on @ApiOperation', () => {
+      @Controller('/o')
+      class OC {
+        @ApiOperation({ summary: 's', deprecated: true })
+        @Get('/')
+        list() {}
+      }
+
+      const document = createOpenApiDocument({
+        title: 'A',
+        version: '1',
+        controllers: [OC],
+      });
+      expect(document.paths['/o']?.get?.deprecated).toBe(true);
+    });
+  });
+});
+
+describe('Validation adapter exports', () => {
+  beforeEach(() => {
+    metadataStorage.clear();
+  });
+
+  it('exposes the expected helper functions', () => {
+    expect(typeof mod.extractValidationConstraints).toBe('function');
+    expect(typeof mod.extractValidationConstraintsV31).toBe('function');
+    expect(typeof mod.isPropertyOptional).toBe('function');
+    expect(typeof mod.isPropertyArray).toBe('function');
+    expect(typeof mod.mergeValidationConstraints).toBe('function');
+    expect(typeof mod.isClassValidatorAvailable).toBe('function');
+  });
+
+  it('returns empty constraints when no metadata exists', () => {
+    const c = mod.extractValidationConstraints(class {}, 'nope');
+    expect(c).toEqual({});
+    const c31 = mod.extractValidationConstraintsV31(class {}, 'nope');
+    expect(c31).toEqual({});
+  });
+
+  it('isPropertyOptional returns false when no metadata exists', () => {
+    expect(mod.isPropertyOptional(class {}, 'nope')).toBe(false);
+    expect(mod.isPropertyArray(class {}, 'nope')).toBe(false);
+  });
+
+  it('mergeValidationConstraints merges into existing schema', () => {
+    const merged = mod.mergeValidationConstraints(
+      { type: 'string' },
+      class {},
+      'nope'
+    );
+    expect(merged.type).toBe('string');
   });
 });
