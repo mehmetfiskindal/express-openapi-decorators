@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Lazy loading support: the OpenAPI document source can be a static object, a `Promise`, or a (sync/async) factory function.
   - Serves the raw JSON specification alongside the Swagger UI at `${path}.json` (or a customizable `rawJsonPath`).
   - Option forwarding for custom site titles and Swagger UI configuration options.
+- **Examples** — five runnable apps under `examples/`:
+  `basic` (CRUD), `auth` (Bearer), `upload` (multipart),
+  `polymorphism` (oneOf + discriminator), `advanced` (extensions,
+  callbacks, exclusions). Each ships its own `openapi.config.ts`
+  and `README.md`.
+- **End-to-end tests** — `tests/e2e/` covers a real Express app via
+  supertest, including the generated OpenAPI document, Swagger UI
+  endpoints, auth middleware, and the CLI subprocess.
 
 ### Fixed
 - **Metadata Storage Sharing**:

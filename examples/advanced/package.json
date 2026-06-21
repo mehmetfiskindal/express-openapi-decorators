@@ -1,0 +1,21 @@
+{
+  "name": "@examples/express-openapi-decorators-advanced",
+  "version": "1.0.0",
+  "description": "Combined example: tags, extensions, links, callbacks, exclude",
+  "private": true,
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "openapi": "express-openapi-decorators generate openapi.config.ts openapi.json"
+  },
+  "dependencies": {
+    "@developersailor/express-openapi-decorators": "*",
+    "express": "^4.18.0",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "@types/express": "^4.17.0",
+    "@types/node": "^20.0.0"
+  }
+}

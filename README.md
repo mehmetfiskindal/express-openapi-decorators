@@ -449,7 +449,170 @@ const document = createOpenApiDocument({
 });
 ```
 
+## CLI
+
+The package ships with a small CLI for producing and validating
+OpenAPI documents outside the runtime — useful for code generation
+pipelines, CI checks, and committing spec snapshots.
+
+### `generate`
+
+```bash
+express-openapi-decorators generate <config-file> [output-file] [options]
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--format` | `json` | `json` or `yaml` |
+| `--openapi` | `3.1.0` | `3.0.3` or `3.1.0` |
+
+The config file is a plain object (or a function returning one) that
+the CLI loads and feeds into `createOpenApiDocument`. The simplest form:
+
+```ts
+// openapi.config.ts
+import { UserController } from './src/user.controller.js';
+import { PostController } from './src/post.controller.js';
+
+export default {
+  openapi: '3.1.0',
+  title: 'My API',
+  version: '1.0.0',
+  servers: [{ url: 'http://localhost:3000' }],
+  controllers: [UserController, PostController],
+};
+```
+
+Run it:
+
+```bash
+express-openapi-decorators generate openapi.config.ts openapi.json
+express-openapi-decorators generate openapi.config.ts openapi.yaml --format yaml
+```
+
+For TypeScript configs the CLI uses your project's installed `tsx`
+(an optional peer dependency). Install once and the CLI picks it up
+automatically:
+
+```bash
+npm install -D tsx
+```
+
+> **Why is `tsx` optional?** Bundling it would add ~50MB to the
+> install. Most users only need it if they keep their config in
+> TypeScript; a plain `openapi.config.js` works without it.
+
+### `validate`
+
+```bash
+express-openapi-decorators validate <config-file>
+```
+
+Builds the document in memory and runs a few sanity checks
+(presence of `info.title` / `info.version`, non-empty `paths`). Exits
+with code 0 on success, non-zero on failure. Useful as a CI step:
+
+```json
+{
+  "scripts": {
+    "openapi:check": "express-openapi-decorators validate openapi.config.ts"
+  }
+}
+```
+
+## Auto Controller Discovery
+
+`loadControllers(pattern, options?)` finds and imports controller
+files matching a glob, returning the decorated class constructors
+they export.
+
+```ts
+// openapi.config.ts
+import { loadControllers } from '@developersailor/express-openapi-decorators';
+
+export default {
+  title: 'My API',
+  version: '1.0.0',
+  controllers: await loadControllers('src/controllers/**/*.controller.ts'),
+};
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `cwd` | `process.cwd()` | Working directory for glob resolution |
+| `ignore` | `['**/node_modules/**', '**/dist/**']` | Glob patterns to skip |
+| `decoratedOnly` | `true` | If `false`, return any exported class (not just `@Controller`-decorated ones) |
+
+`loadControllers` requires `tsx` for `.ts` files; for plain `.js`
+configs no extra dependency is needed.
+
+## Swagger UI Setup
+
+`setupSwaggerUI(app, options)` mounts a Swagger UI endpoint and a
+raw-JSON endpoint on an Express app or router.
+
+```ts
+import express from 'express';
+import {
+  setupSwaggerUI,
+  createOpenApiDocument,
+} from '@developersailor/express-openapi-decorators';
+import { UserController } from './user.controller.js';
+
+const app = express();
+const document = createOpenApiDocument({
+  openapi: '3.1.0',
+  title: 'My API',
+  version: '1.0.0',
+  controllers: [UserController],
+});
+
+setupSwaggerUI(app, {
+  path: '/docs',          // default
+  rawJsonPath: '/openapi.json',  // default: `${path}.json`
+  document,               // pre-built, or a () => Document, or Promise<Document>
+});
+
+app.listen(3000);
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `path` | `/docs` | Mount path for the Swagger UI HTML |
+| `rawJsonPath` | `${path}.json` | Path for the raw OpenAPI document |
+| `document` | required | Document object, factory, or Promise |
+| `customSiteTitle` | `API Documentation` | Browser title |
+| `swaggerOptions` | `{}` | Extra options passed to swagger-ui-express |
+
+The `document` option is resolved lazily on the first request to
+`path` or `rawJsonPath` and cached for the lifetime of the process.
+This is useful when the document depends on data only available at
+runtime (e.g. database-driven controllers).
+
 ## Examples
+
+The `examples/` directory contains five runnable apps that demonstrate
+specific features in isolation. Each one is a self-contained
+package with its own `package.json`, `openapi.config.ts`, and
+`README.md` walking you through how to run it.
+
+| Example | What it shows |
+| --- | --- |
+| [`examples/basic`](./examples/basic/) | Minimal CRUD: `@Controller`, `@Get` / `@Post`, `@ApiResponse`, `@ApiBody` |
+| [`examples/auth`](./examples/auth/) | `@ApiBearerAuth` + `@Use(middleware)` for protected routes, and `@Public()` for anonymous ones |
+| [`examples/upload`](./examples/upload/) | `@ApiConsumes('multipart/form-data')` + `@ApiFile` for a single upload field |
+| [`examples/polymorphism`](./examples/polymorphism/) | `@ApiProperty({ oneOf, discriminator })` for typed unions |
+| [`examples/advanced`](./examples/advanced/) | Combines `@ApiExtension`, `@ApiCallback`, `@ApiExcludeEndpoint`, and security decorators |
+
+To run any of them:
+
+```bash
+cd examples/basic
+npm install
+npm link @developersailor/express-openapi-decorators
+npm start          # http://localhost:3000
+npm run openapi    # writes ./openapi.json
+```
 
 ### Array Response
 
@@ -512,6 +675,80 @@ searchUsers() {}
 getUserById() {}
 ```
 
+## Migration from `@nestjs/swagger`
+
+This package provides a NestJS-compatible developer experience without
+the NestJS framework. The decorator surface is a strict subset of
+`@nestjs/swagger` — most code that decorates a NestJS controller
+will work here with only the import path changed.
+
+| `@nestjs/swagger` | `@developersailor/express-openapi-decorators` |
+| --- | --- |
+| `import { ApiProperty } from '@nestjs/swagger'` | `import { ApiProperty } from '@developersailor/express-openapi-decorators'` |
+| `import { Controller, Get } from '@nestjs/common'` | `import { Controller, Get } from '@developersailor/express-openapi-decorators'` |
+| `import { NestFactory } from '@nestjs/core'` | `import express from 'express'; const app = express();` |
+| `SwaggerModule.createDocument(app, options)` | `createOpenApiDocument(options)` |
+| `SwaggerModule.setup('/docs', app, document)` | `setupSwaggerUI(app, { path: '/docs', document })` |
+| `class UserDto { @ApiProperty() name: string; }` | identical |
+
+### Things that don't translate
+
+- **Dependency injection.** There is no `Module` / `Provider` system.
+  Controllers are plain classes; you wire them up yourself with
+  `createRouterFromControllers([UserController])`.
+- **Built-in validation pipe.** This package only generates docs.
+  Pair with `class-validator` + a manual middleware, or use a
+  framework like `zod`.
+- **WebSocket / GraphQL decorators.** Out of scope; the package is
+  REST-focused.
+- **Plugin-based TypeScript transformer.** `@nestjs/swagger` ships
+  a `tsc` plugin that adds metadata at compile time. This package
+  relies on `emitDecoratorMetadata` (the TypeScript compiler flag),
+  which is the same approach as `class-validator` and `typeorm`.
+
+### Example migration
+
+A NestJS controller:
+
+```ts
+// Before (NestJS)
+import { Controller, Get } from '@nestjs/common';
+import { ApiTags, ApiResponse } from '@nestjs/swagger';
+import { UserService } from './user.service';
+
+@ApiTags('users')
+@Controller('users')
+export class UserController {
+  constructor(private readonly users: UserService) {}
+
+  @Get(':id')
+  @ApiResponse({ status: 200, type: UserDto })
+  getOne(@Param('id') id: string) { /* ... */ }
+}
+```
+
+The equivalent in this package:
+
+```ts
+// After
+import { Controller, Get, Param, ApiTags, ApiResponse } from '@developersailor/express-openapi-decorators';
+import { UserService } from './user.service';
+
+@ApiTags('users')
+@Controller('/users')
+export class UserController {
+  // No constructor DI — pass dependencies in manually
+  constructor(private readonly users: UserService = new UserService()) {}
+
+  @Get('/:id')
+  @ApiResponse({ status: 200, type: UserDto })
+  getOne(@Param('id') id: string) { /* ... */ }
+}
+```
+
+The rest of the wiring (router, validators, error handlers) is your
+responsibility — that's the price of not using a framework.
+
 ## Requirements
 
 - Node.js >= 18.0.0
@@ -529,7 +766,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Roadmap
 
-### Completed in 2.3.0
+### Completed in 2.4.0
 - [x] Core decorator system
 - [x] DTO schema generation
 - [x] Query, path, and header parameters
@@ -551,8 +788,12 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] Circular DTO reference protection
 - [x] Response headers on `@ApiResponse`
 - [x] Method-level tag override on `@ApiOperation`
+- [x] CLI: `generate` and `validate` commands
+- [x] Auto controller discovery via `loadControllers()`
+- [x] `setupSwaggerUI()` helper
+- [x] Five runnable examples in `examples/`
 
 ### Planned for upcoming releases
-- [ ] CLI: `npx express-openapi-decorators generate`
-- [ ] Auto controller discovery via glob
-- [ ] Swagger UI route helper
+- [ ] CLI `serve` command (local Swagger UI preview)
+- [ ] CLI `watch` mode (auto-regenerate on file change)
+- [ ] Schema migration tool (diff between two versions)
