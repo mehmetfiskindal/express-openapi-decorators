@@ -47,11 +47,25 @@ function convertExpressParamsToOpenApi(path: string): string {
 
 /**
  * Get primitive type for OpenAPI parameter schema
+ * Non-primitive types are coerced to 'string' because path/query parameters
+ * cannot be modelled as JSON Schema references in OpenAPI 3.0/3.1.
  */
 function getPrimitiveTypeName(type: Function): 'string' | 'number' | 'boolean' {
   if (type === String) return 'string';
   if (type === Number) return 'number';
   if (type === Boolean) return 'boolean';
+  // Anything else (DTO classes, custom classes, etc.) is not allowed as a
+  // primitive path/query/header parameter in OpenAPI. Fall back to 'string'
+  // so the generated document is still valid even if a developer decorates
+  // a parameter with a class type by mistake.
+  if (typeof console !== 'undefined' && type && type !== Object) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[express-openapi-decorators] Parameter type "${type.name ?? 'anonymous'}" ` +
+        `is not a primitive (String/Number/Boolean). Coercing to "string" ` +
+        `for OpenAPI compatibility.`
+    );
+  }
   return 'string';
 }
 
@@ -84,19 +98,47 @@ function schemaForTypeV31(type: Function): OpenAPIV3_1.SchemaObject | OpenAPIV3_
 }
 
 /**
+ * Build the schema for a primitive parameter (query/path/header).
+ * Surfaces format, enum and default in addition to the base type.
+ */
+function buildPrimitiveParameterSchema(
+  type: Function,
+  format: string | undefined,
+  enumValues: unknown[] | undefined,
+  defaultValue: unknown
+): OpenAPIV3.SchemaObject {
+  const schema: OpenAPIV3.SchemaObject = {
+    type: getPrimitiveTypeName(type),
+  };
+  if (format) {
+    schema.format = format;
+  }
+  if (enumValues && enumValues.length > 0) {
+    schema.enum = enumValues;
+  }
+  if (defaultValue !== undefined) {
+    schema.default = defaultValue;
+  }
+  return schema;
+}
+
+/**
  * Generate query parameters for a method
  */
 function generateQueryParameters(target: Function, methodName: string): OpenAPIV3.ParameterObject[] {
   const queryParams = metadataStorage.getQueryParamsForMethod(target, methodName);
-  
+
   return queryParams.map((param): OpenAPIV3.ParameterObject => {
     const parameter: OpenAPIV3.ParameterObject = {
       name: param.name,
       in: 'query',
       required: param.required ?? false,
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchema(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -105,6 +147,10 @@ function generateQueryParameters(target: Function, methodName: string): OpenAPIV
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -116,15 +162,18 @@ function generateQueryParameters(target: Function, methodName: string): OpenAPIV
  */
 function generatePathParameters(target: Function, methodName: string): OpenAPIV3.ParameterObject[] {
   const pathParams = metadataStorage.getPathParamsForMethod(target, methodName);
-  
+
   return pathParams.map((param): OpenAPIV3.ParameterObject => {
     const parameter: OpenAPIV3.ParameterObject = {
       name: param.name,
       in: 'path',
       required: true, // Path parameters are always required
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchema(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -133,6 +182,10 @@ function generatePathParameters(target: Function, methodName: string): OpenAPIV3
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -310,15 +363,15 @@ function generateSecurityRequirements(
 ): OpenAPIV3.SecurityRequirementObject[] | undefined {
   // Get controller-level security
   const controllerSecurity = metadataStorage.getSecurityForController(controller);
-  
+
   // Get method-level security
   const methodSecurity = metadataStorage.getSecurityForMethod(target, methodName);
-  
+
   // Method-level security takes precedence over controller-level
   // If method has security defined (including empty array for @Public()), use it
   // Otherwise, use controller-level security
   let effectiveSecurity: typeof methodSecurity;
-  
+
   if (methodSecurity.length > 0) {
     effectiveSecurity = methodSecurity;
   } else if (controllerSecurity.length > 0) {
@@ -326,7 +379,14 @@ function generateSecurityRequirements(
   } else {
     return undefined;
   }
-  
+
+  // @Public() stores schemes: [] to signal "no security required". Skip
+  // emitting `security: [{}]` (which Swagger UI renders as "anonymous only")
+  // and return undefined so the operation inherits no security block.
+  if (effectiveSecurity.every((r) => r.schemes.length === 0)) {
+    return undefined;
+  }
+
   // Convert to OpenAPI format
   const security: OpenAPIV3.SecurityRequirementObject[] = effectiveSecurity.map(req => {
     const requirement: OpenAPIV3.SecurityRequirementObject = {};
@@ -335,7 +395,7 @@ function generateSecurityRequirements(
     }
     return requirement;
   });
-  
+
   return security.length > 0 ? security : undefined;
 }
 
@@ -446,6 +506,30 @@ export function generatePaths(controllers: Function[]): OpenAPIV3.PathsObject {
 }
 
 /**
+ * Build the schema for a primitive parameter (query/path/header) — 3.1 variant.
+ */
+function buildPrimitiveParameterSchemaV31(
+  type: Function,
+  format: string | undefined,
+  enumValues: unknown[] | undefined,
+  defaultValue: unknown
+): OpenAPIV3_1.SchemaObject {
+  const schema: OpenAPIV3_1.SchemaObject = {
+    type: getPrimitiveTypeName(type),
+  };
+  if (format) {
+    schema.format = format;
+  }
+  if (enumValues && enumValues.length > 0) {
+    schema.enum = enumValues;
+  }
+  if (defaultValue !== undefined) {
+    schema.default = defaultValue;
+  }
+  return schema;
+}
+
+/**
  * Generate query parameters for OpenAPI 3.1.0
  */
 function generateQueryParametersV31(target: Function, methodName: string): ParameterObjectV31[] {
@@ -456,9 +540,12 @@ function generateQueryParametersV31(target: Function, methodName: string): Param
       name: param.name,
       in: 'query',
       required: param.required ?? false,
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchemaV31(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -467,6 +554,10 @@ function generateQueryParametersV31(target: Function, methodName: string): Param
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -484,9 +575,12 @@ function generatePathParametersV31(target: Function, methodName: string): Parame
       name: param.name,
       in: 'path',
       required: true, // Path parameters are always required
-      schema: {
-        type: getPrimitiveTypeName(param.type),
-      },
+      schema: buildPrimitiveParameterSchemaV31(
+        param.type,
+        param.format,
+        param.enum,
+        param.default
+      ),
     };
 
     if (param.description) {
@@ -495,6 +589,10 @@ function generatePathParametersV31(target: Function, methodName: string): Parame
 
     if (param.example !== undefined) {
       parameter.example = param.example;
+    }
+
+    if (param.deprecated) {
+      parameter.deprecated = true;
     }
 
     return parameter;
@@ -669,6 +767,13 @@ function generateSecurityRequirementsV31(
   } else if (controllerSecurity.length > 0) {
     effectiveSecurity = controllerSecurity;
   } else {
+    return undefined;
+  }
+
+  // @Public() stores schemes: [] to signal "no security required". Skip
+  // emitting `security: [{}]` (which Swagger UI renders as "anonymous only")
+  // and return undefined so the operation inherits no security block.
+  if (effectiveSecurity.every((r) => r.schemes.length === 0)) {
     return undefined;
   }
 

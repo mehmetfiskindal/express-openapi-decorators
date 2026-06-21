@@ -95,9 +95,17 @@ class MetadataStorageImpl {
 
   /**
    * Add tags metadata
+   * Multiple @ApiTags on the same target are merged into a single record
+   * so the union of all tag lists is preserved.
    */
   addTags(metadata: ApiTagsMetadata): void {
-    this.tags.push(metadata);
+    const existing = this.tags.find((t) => t.target === metadata.target);
+    if (existing) {
+      const merged = new Set<string>([...existing.tags, ...metadata.tags]);
+      existing.tags = Array.from(merged);
+    } else {
+      this.tags.push(metadata);
+    }
   }
 
   /**
@@ -115,9 +123,24 @@ class MetadataStorageImpl {
 
   /**
    * Add security requirement metadata
+   * Duplicate (target, methodName, schemes) tuples are ignored to prevent
+   * emitting redundant `security` entries when the same scheme is applied
+   * more than once to the same route.
    */
   addSecurityRequirement(metadata: ApiSecurityMetadata): void {
-    this.securityRequirements.push(metadata);
+    const key = `${metadata.target.name || metadata.target.toString()}|${metadata.methodName ?? ''}|[${[...metadata.schemes].sort().join(',')}]`;
+    const exists = this.securityRequirements.some(
+      (r) =>
+        r.target === metadata.target &&
+        r.methodName === metadata.methodName &&
+        r.schemes.length === metadata.schemes.length &&
+        [...r.schemes].sort().join(',') === [...metadata.schemes].sort().join(',')
+    );
+    if (!exists) {
+      this.securityRequirements.push(metadata);
+    }
+    // key is computed for future use / debugging; left in for clarity.
+    void key;
   }
 
   /**
@@ -265,10 +288,18 @@ class MetadataStorageImpl {
 
   /**
    * Get tags for a specific controller
+   * Merges tags from every @ApiTags declaration on the controller
    */
   getTagsForController(controller: Function): string[] {
-    const tagsMetadata = this.tags.find((t) => t.target === controller);
-    return tagsMetadata?.tags ?? [];
+    const merged = new Set<string>();
+    for (const t of this.tags) {
+      if (t.target === controller) {
+        for (const tag of t.tags) {
+          merged.add(tag);
+        }
+      }
+    }
+    return Array.from(merged);
   }
 
   /**
@@ -280,6 +311,7 @@ class MetadataStorageImpl {
 
   /**
    * Clear all metadata (useful for testing)
+   * Also clears the schema cache to avoid stale schemas across runs.
    */
   clear(): void {
     this.controllers.length = 0;
@@ -296,6 +328,19 @@ class MetadataStorageImpl {
     this.fileParams.length = 0;
     this.consumes.length = 0;
     this.middlewares.length = 0;
+    // Reset schema cache so re-running with the same DTO class reflects
+    // any updates to the decorator metadata.
+    try {
+      // Lazy import to avoid a circular dependency at module load.
+      const schemaMod = require('../generator/schema-generator.js') as {
+        clearSchemaCache?: () => void;
+      };
+      schemaMod.clearSchemaCache?.();
+    } catch {
+      // If the schema module is not available for any reason, the cache
+      // simply stays as-is. Generation will still work, but stale entries
+      // may be served.
+    }
   }
 }
 
