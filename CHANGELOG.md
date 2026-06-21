@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-06-21
+
+### Added
+- **Command-Line Interface (CLI)**:
+  - Added the `express-openapi-decorators` CLI tool (via `cac`) to generate and validate OpenAPI documents.
+  - Subcommand `generate <config> [output]` to output an OpenAPI spec file in JSON or YAML formats (`--format <format>`), supporting OpenAPI versions 3.0.3 and 3.1.0 (`--openapi <version>`).
+  - Subcommand `validate <config>` to validate OpenAPI generation in-memory.
+  - Support for configuration files exporting either a plain configuration object or a (synchronous or asynchronous) factory function.
+  - Native ES module loading and `tsx` integration for seamless support of TypeScript config files (`.ts` / `.tsx`).
+- **Controller Discovery**:
+  - `loadControllers(patternOrOptions, options)` helper function to auto-discover and load controller classes using glob patterns (via `fast-glob`).
+  - Support for filtering only `@Controller` decorated classes (`decoratedOnly: true`) or returning all class constructors.
+- **Swagger UI Integration Helper**:
+  - `setupSwaggerUI(host, options)` helper to mount Swagger UI (using `swagger-ui-express`) onto an Express app or router.
+  - Lazy loading support: the OpenAPI document source can be a static object, a `Promise`, or a (sync/async) factory function.
+  - Serves the raw JSON specification alongside the Swagger UI at `${path}.json` (or a customizable `rawJsonPath`).
+  - Option forwarding for custom site titles and Swagger UI configuration options.
+
+### Fixed
+- **Metadata Storage Sharing**:
+  - Attached the metadata storage singleton to `globalThis` (`__expressOpenApiDecoratorsStorage`), ensuring that the metadata storage is shared across ESM and CommonJS boundaries, preventing empty OpenAPI document generation when mixing ESM and CJS modules.
+
 ## [2.3.0] - 2026-06-21
 
 ### Added
@@ -100,4 +122,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [2.1.2]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.1.2
 [2.2.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.2.0
 [2.3.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.3.0
+[2.4.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v2.4.0
 [0.1.0]: https://github.com/mehmetfiskindal/express-openapi-decorators/releases/tag/v0.1.0
