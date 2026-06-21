@@ -576,7 +576,22 @@ class MetadataStorageImpl {
 /**
  * Global metadata storage instance
  */
-export const metadataStorage = new MetadataStorageImpl();
+/**
+ * Singleton metadata storage.
+ *
+ * The storage is keyed on `globalThis` so that CJS and ESM bundles
+ * of this package share a single instance. Without this trick, a user
+ * config that does `require('.../dist/index.js')` (CJS) populates a
+ * different storage than the CLI which uses `import('.../dist/index.mjs')`
+ * (ESM), and the generated document comes out empty.
+ */
+type GlobalWithStorage = typeof globalThis & {
+  __expressOpenApiDecoratorsStorage?: MetadataStorageImpl;
+};
+const _g = globalThis as GlobalWithStorage;
+export const metadataStorage: MetadataStorageImpl =
+  _g.__expressOpenApiDecoratorsStorage ??
+  (_g.__expressOpenApiDecoratorsStorage = new MetadataStorageImpl());
 
 /**
  * Metadata keys for reflect-metadata

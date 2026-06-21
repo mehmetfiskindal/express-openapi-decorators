@@ -121,6 +121,14 @@ export type { ApiCallbackDefinition } from './decorators/api-callback.decorator.
 export { ApiLink, ApiDefaultGetter } from './decorators/api-link.decorator.js';
 export type { ApiLinkOptions } from './decorators/api-link.decorator.js';
 
+// Discovery
+export { loadControllers } from './discovery/load-controllers.js';
+export type { LoadControllersOptions } from './discovery/load-controllers.js';
+
+// Swagger UI helper
+export { setupSwaggerUI } from './swagger-ui.js';
+export type { SetupSwaggerUIOptions } from './swagger-ui.js';
+
 // Decorators - Middleware
 export { Use, Middleware } from './decorators/middleware.decorator.js';
 
