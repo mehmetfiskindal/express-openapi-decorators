@@ -351,7 +351,7 @@ export const Security = ApiSecurity;
  * Explicitly mark a route as having no security (public endpoint)
  * This overrides controller-level security
  * @returns Method decorator
- * 
+ *
  * @example
  * ```typescript
  * @ApiBearerAuth()
@@ -360,7 +360,7 @@ export const Security = ApiSecurity;
  *   @Public()
  *   @Get('/public-info')
  *   publicInfo() {} // No authentication required
- * 
+ *
  *   @Get('/private-info')
  *   privateInfo() {} // Requires bearer token
  * }
@@ -374,4 +374,61 @@ export function Public(): MethodDecorator {
       schemes: [], // Empty array means no security required
     });
   };
+}
+
+/**
+ * Register a cookie-based security scheme.
+ * Internally registers an `apiKey` security scheme with `in: 'cookie'`
+ * and applies it to the route or controller as a security requirement.
+ * This is a sugar around `@ApiApiKey({ in: 'cookie' })`.
+ *
+ * @param name - Name of the security scheme (default: 'cookie')
+ * @param options - Cookie options
+ * @returns Class or method decorator
+ *
+ * @example
+ * ```typescript
+ * // Default: registers a scheme named 'cookie'
+ * @ApiCookieAuth()
+ * @Controller('/profile')
+ * class ProfileController {}
+ *
+ * // Custom name and cookie name
+ * @ApiCookieAuth('session', { name: 'connect.sid', description: 'Express session' })
+ * @Controller('/dashboard')
+ * class DashboardController {}
+ * ```
+ */
+export function ApiCookieAuth(
+  name: string = 'cookie',
+  options?: { name?: string; description?: string }
+): ClassDecorator & MethodDecorator {
+  return function (target: Function | Object, propertyKey?: string | symbol) {
+    const cookieName = options?.name ?? name;
+
+    metadataStorage.addSecurityScheme({
+      name,
+      apiKeyName: cookieName,
+      type: 'apiKey',
+      in: 'cookie',
+      description: options?.description,
+      scheme: undefined,
+      bearerFormat: undefined,
+      flows: undefined,
+      openIdConnectUrl: undefined,
+    });
+
+    if (typeof target === 'function' && !propertyKey) {
+      metadataStorage.addSecurityRequirement({
+        target,
+        schemes: [name],
+      });
+    } else if (propertyKey) {
+      metadataStorage.addSecurityRequirement({
+        target: target.constructor,
+        methodName: propertyKey as string,
+        schemes: [name],
+      });
+    }
+  } as ClassDecorator & MethodDecorator;
 }

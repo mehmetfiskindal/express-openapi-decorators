@@ -233,11 +233,12 @@ export class ExpressAdapter {
     ];
 
     // Get the handler function from the controller instance
-    const handler = instance[method.methodName].bind(instance);
+    const rawHandler = instance[method.methodName].bind(instance);
+    const handler = this.wrapHandler(rawHandler);
 
     // Register the route
     const httpMethod = method.httpMethod as HttpMethod;
-    
+
     if (middlewares.length > 0) {
       this.router[httpMethod](fullPath, ...middlewares.map(m => this.wrapMiddleware(m)), handler);
     } else {
@@ -268,6 +269,32 @@ export class ExpressAdapter {
         const result = middleware(req, res, next);
         if (result && typeof result.then === 'function') {
           result.catch(next);
+        }
+      } catch (error) {
+        next(error);
+      }
+    };
+  }
+
+  /**
+   * Wrap a route handler to forward async errors to Express' error pipeline.
+   * Express 4 discards rejected promises returned from handlers, so without
+   * this wrapper an async handler throwing would surface as an unhandled
+   * promise rejection instead of reaching the user-defined error middleware.
+   * Express 5 already handles this natively, but the wrapper is a no-op there.
+   */
+  private wrapHandler(handler: RequestHandler): RequestHandler {
+    return (req: Request, res: Response, next: NextFunction) => {
+      try {
+        // RequestHandler's return type is `void`, but in practice async
+        // handlers can return a Promise. We widen to `unknown` so the
+        // thenable check below compiles cleanly.
+        const result: unknown = handler(req, res, next);
+        if (
+          result &&
+          typeof (result as { then?: unknown }).then === 'function'
+        ) {
+          (result as Promise<unknown>).catch(next);
         }
       } catch (error) {
         next(error);

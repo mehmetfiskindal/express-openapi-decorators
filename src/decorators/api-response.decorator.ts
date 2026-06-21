@@ -1,5 +1,13 @@
 import { metadataStorage } from '../metadata/metadata-storage.js';
-import type { ApiResponseMetadata } from '../metadata/metadata-types.js';
+import type {
+  ApiResponseHeaderDefinition,
+  ApiResponseMetadata,
+} from '../metadata/metadata-types.js';
+
+/**
+ * Single response header definition
+ */
+export interface ApiResponseHeaderOptions extends ApiResponseHeaderDefinition {}
 
 /**
  * Options for @ApiResponse decorator
@@ -20,6 +28,12 @@ export interface ApiResponseOptions {
    * Can be a DTO class or an array of DTO classes: [UserDto]
    */
   type?: Function | [Function];
+
+  /**
+   * Response headers keyed by header name (e.g. `'X-RateLimit-Remaining'`).
+   * Each entry is emitted on the response's `headers` map.
+   */
+  headers?: Record<string, ApiResponseHeaderOptions>;
 }
 
 /**
@@ -59,6 +73,7 @@ export function ApiResponse(
     let type: Function | undefined;
     let description: string | undefined;
     let isArray = false;
+    let headers: Record<string, ApiResponseHeaderDefinition> | undefined;
 
     if (typeof statusOrOptions === 'number') {
       status = statusOrOptions;
@@ -81,6 +96,7 @@ export function ApiResponse(
           type = statusOrOptions.type;
         }
       }
+      headers = statusOrOptions.headers;
     }
 
     const metadata: ApiResponseMetadata = {
@@ -93,5 +109,14 @@ export function ApiResponse(
     };
 
     metadataStorage.addResponse(metadata);
+
+    if (headers) {
+      metadataStorage.addResponseHeaders({
+        target: target.constructor as Function,
+        methodName: propertyKey as string,
+        status,
+        headers,
+      });
+    }
   };
 }

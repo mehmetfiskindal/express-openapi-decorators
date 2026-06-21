@@ -117,6 +117,32 @@ export function ApiConsumes(...contentTypes: string[]): MethodDecorator {
 }
 
 /**
+ * Specify produced (response) content types for the endpoint.
+ * Defaults to `application/json` when no response has a content type.
+ * The first declared content type is used as the response content;
+ * additional types are kept available for consumers that need them.
+ *
+ * @example
+ * ```typescript
+ * @Controller('/feed')
+ * class FeedController {
+ *   @ApiProduces('application/xml', 'application/json')
+ *   @Get('/')
+ *   feed() {}
+ * }
+ * ```
+ */
+export function ApiProduces(...contentTypes: string[]): MethodDecorator {
+  return function (target: Object, propertyKey: string | symbol) {
+    metadataStorage.addProduces({
+      target: target.constructor,
+      methodName: propertyKey as string,
+      contentTypes,
+    });
+  };
+}
+
+/**
  * Form data decorator - shorthand for multipart/form-data uploads
  * Combines @ApiConsumes('multipart/form-data') with file support
  * @param options - File upload options (optional)

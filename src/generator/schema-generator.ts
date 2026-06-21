@@ -60,19 +60,42 @@ function getPrimitiveSchema(type: Function): OpenAPIV3.SchemaObject {
 function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject {
   const schema: OpenAPIV3.SchemaObject = {};
 
+  // Polymorphism (oneOf / anyOf / allOf) — when any composition list is
+  // provided, the type/format/description fields are merged onto the
+  // wrapper schema, but the reference list takes priority.
+  if (metadata.oneOf || metadata.anyOf || metadata.allOf || metadata.discriminator) {
+    const refs = (list: Function[] | undefined) =>
+      (list ?? []).map(
+        (c) =>
+          ({
+            $ref: `#/components/schemas/${resolveSchemaName(c)}`,
+          } as OpenAPIV3.ReferenceObject)
+      );
+    if (metadata.oneOf) schema.oneOf = refs(metadata.oneOf);
+    if (metadata.anyOf) schema.anyOf = refs(metadata.anyOf);
+    if (metadata.allOf) schema.allOf = refs(metadata.allOf);
+    if (metadata.discriminator) schema.discriminator = metadata.discriminator;
+  }
+
   // Handle array type
   if (metadata.isArray && metadata.type) {
     schema.type = 'array';
-    
+
     // Check if array item type is a primitive or DTO
     if (isPrimitiveType(metadata.type)) {
       schema.items = getPrimitiveSchema(metadata.type);
     } else {
       // It's a DTO, generate reference
       schema.items = {
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3.ReferenceObject;
     }
+  } else if (metadata.isArray && !metadata.type) {
+    // Array with unknown element type (e.g. inferred from design:type = Array
+    // without an explicit element type). Emit a safe open-ended array schema
+    // so the document stays valid OpenAPI.
+    schema.type = 'array';
+    schema.items = {};
   } else if (metadata.type) {
     // Non-array type
     if (isPrimitiveType(metadata.type)) {
@@ -81,7 +104,7 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
     } else {
       // It's a DTO, generate reference
       schema.allOf = [{
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3.ReferenceObject];
     }
   }
@@ -111,6 +134,17 @@ function propertyMetadataToSchema(metadata: ApiPropertyMetadata): OpenAPIV3.Sche
     schema.description = metadata.description;
   }
 
+  // OpenAPI 3.0 boolean flags
+  if (metadata.readOnly) {
+    schema.readOnly = true;
+  }
+  if (metadata.writeOnly) {
+    schema.writeOnly = true;
+  }
+  if (metadata.deprecated) {
+    schema.deprecated = true;
+  }
+
   // Merge class-validator constraints if available
   if (isClassValidatorAvailable()) {
     const validationConstraints = extractValidationConstraints(
@@ -138,6 +172,14 @@ function isPrimitiveType(type: Function): boolean {
 
 
 /**
+ * Resolve the schema name for a DTO class. Honors the @ApiSchema
+ * override; otherwise returns the class's runtime name.
+ */
+export function resolveSchemaName(dtoClass: Function): string {
+  return metadataStorage.getSchemaNameFor(dtoClass) ?? dtoClass.name;
+}
+
+/**
  * Generate OpenAPI schema for a DTO class
  */
 export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject {
@@ -152,19 +194,27 @@ export function generateSchemaForDto(dtoClass: Function): OpenAPIV3.SchemaObject
   const schema: OpenAPIV3.SchemaObject = {
     type: 'object',
     properties: {} as Record<string, OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject>,
-    required: [],
   };
 
+  const required: string[] = [];
+
   for (const property of properties) {
+    // @ApiHideProperty() — drop the property entirely
+    if (property.hidden) continue;
+
     // Add property to schema
     if (schema.properties) {
       schema.properties[property.propertyKey] = propertyMetadataToSchema(property);
     }
 
     // Add to required list if property is required
-    if (property.required && schema.required) {
-      schema.required.push(property.propertyKey);
+    if (property.required) {
+      required.push(property.propertyKey);
     }
+  }
+
+  if (required.length > 0) {
+    schema.required = required;
   }
 
   // Cache the schema
@@ -242,10 +292,15 @@ export function collectDtoClasses(): Set<Function> {
  */
 export function generateSchemas(): Record<string, OpenAPIV3.SchemaObject> {
   const dtoClasses = collectDtoClasses();
+  // Extra models registered via @ApiExtraModels — included even when
+  // nothing references them directly.
+  for (const m of metadataStorage.getExtraModels()) {
+    dtoClasses.add(m);
+  }
   const schemas: Record<string, OpenAPIV3.SchemaObject> = {};
 
   for (const dtoClass of dtoClasses) {
-    schemas[dtoClass.name] = generateSchemaForDto(dtoClass);
+    schemas[resolveSchemaName(dtoClass)] = generateSchemaForDto(dtoClass);
   }
 
   return schemas;
@@ -258,6 +313,21 @@ export function generateSchemas(): Record<string, OpenAPIV3.SchemaObject> {
 function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjectV31 | OpenAPIV3_1.ReferenceObject {
   const schema: SchemaObjectV31 = {};
 
+  // Polymorphism (oneOf / anyOf / allOf) — see V3 variant.
+  if (metadata.oneOf || metadata.anyOf || metadata.allOf || metadata.discriminator) {
+    const refs = (list: Function[] | undefined) =>
+      (list ?? []).map(
+        (c) =>
+          ({
+            $ref: `#/components/schemas/${resolveSchemaName(c)}`,
+          } as OpenAPIV3_1.ReferenceObject)
+      );
+    if (metadata.oneOf) schema.oneOf = refs(metadata.oneOf);
+    if (metadata.anyOf) schema.anyOf = refs(metadata.anyOf);
+    if (metadata.allOf) schema.allOf = refs(metadata.allOf);
+    if (metadata.discriminator) schema.discriminator = metadata.discriminator;
+  }
+
   // Handle array type
   if (metadata.isArray && metadata.type) {
     schema.type = 'array';
@@ -268,9 +338,15 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
     } else {
       // It's a DTO, generate reference
       schema.items = {
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3_1.ReferenceObject;
     }
+  } else if (metadata.isArray && !metadata.type) {
+    // Array with unknown element type (e.g. inferred from design:type = Array
+    // without an explicit element type). Emit a safe open-ended array schema
+    // so the document stays valid OpenAPI.
+    schema.type = 'array';
+    schema.items = {};
   } else if (metadata.type) {
     // Non-array type
     if (isPrimitiveType(metadata.type)) {
@@ -279,7 +355,7 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
     } else {
       // It's a DTO, generate reference
       schema.allOf = [{
-        $ref: `#/components/schemas/${metadata.type.name}`,
+        $ref: `#/components/schemas/${resolveSchemaName(metadata.type)}`,
       } as OpenAPIV3_1.ReferenceObject];
     }
   }
@@ -307,6 +383,17 @@ function propertyMetadataToSchemaV31(metadata: ApiPropertyMetadata): SchemaObjec
   // Add description if present
   if (metadata.description) {
     schema.description = metadata.description;
+  }
+
+  // OpenAPI 3.1 boolean flags
+  if (metadata.readOnly) {
+    schema.readOnly = true;
+  }
+  if (metadata.writeOnly) {
+    schema.writeOnly = true;
+  }
+  if (metadata.deprecated) {
+    schema.deprecated = true;
   }
 
   // Merge class-validator constraints if available
@@ -349,19 +436,27 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
   const schema: SchemaObjectV31 = {
     type: 'object',
     properties: {} as Record<string, SchemaObjectV31 | OpenAPIV3_1.ReferenceObject>,
-    required: [],
   };
 
+  const required: string[] = [];
+
   for (const property of properties) {
+    // @ApiHideProperty() — drop the property entirely
+    if (property.hidden) continue;
+
     // Add property to schema
     if (schema.properties) {
       schema.properties[property.propertyKey] = propertyMetadataToSchemaV31(property);
     }
 
     // Add to required list if property is required
-    if (property.required && schema.required) {
-      schema.required.push(property.propertyKey);
+    if (property.required) {
+      required.push(property.propertyKey);
     }
+  }
+
+  if (required.length > 0) {
+    schema.required = required;
   }
 
   // Cache the schema
@@ -375,10 +470,13 @@ export function generateSchemaForDtoV31(dtoClass: Function): SchemaObjectV31 {
  */
 export function generateSchemasV31(): Record<string, SchemaObjectV31> {
   const dtoClasses = collectDtoClasses();
+  for (const m of metadataStorage.getExtraModels()) {
+    dtoClasses.add(m);
+  }
   const schemas: Record<string, SchemaObjectV31> = {};
 
   for (const dtoClass of dtoClasses) {
-    schemas[dtoClass.name] = generateSchemaForDtoV31(dtoClass);
+    schemas[resolveSchemaName(dtoClass)] = generateSchemaForDtoV31(dtoClass);
   }
 
   return schemas;
