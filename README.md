@@ -1,9 +1,9 @@
 # openapi-decorators
 
-[![npm version](https://img.shields.io/npm/v/@mehmetfiskindal/openapi-decorators.svg)](https://www.npmjs.com/package/@mehmetfiskindal/openapi-decorators)
-[![npm downloads](https://img.shields.io/npm/dm/@mehmetfiskindal/openapi-decorators.svg)](https://www.npmjs.com/package/@mehmetfiskindal/openapi-decorators)
+[![npm version](https://img.shields.io/npm/v/@developersailor/openapi-decorators.svg)](https://www.npmjs.com/package/@developersailor/openapi-decorators)
+[![npm downloads](https://img.shields.io/npm/dm/@developersailor/openapi-decorators.svg)](https://www.npmjs.com/package/@developersailor/openapi-decorators)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/node/v/@mehmetfiskindal/openapi-decorators)](https://nodejs.org/)
+[![Node.js Version](https://img.shields.io/node/v/@developersailor/openapi-decorators)](https://nodejs.org/)
 
 > Zero-dependency NestJS-like Swagger OpenAPI decorators for Express.js, Hono, and TypeScript.
 
@@ -23,13 +23,13 @@ Generate OpenAPI 3.0 / 3.1 documentation from TypeScript decorators without writ
 
 ```bash
 # npm
-npm install @mehmetfiskindal/openapi-decorators reflect-metadata
+npm install @developersailor/openapi-decorators reflect-metadata
 
 # yarn
-yarn add @mehmetfiskindal/openapi-decorators reflect-metadata
+yarn add @developersailor/openapi-decorators reflect-metadata
 
 # pnpm
-pnpm add @mehmetfiskindal/openapi-decorators reflect-metadata
+pnpm add @developersailor/openapi-decorators reflect-metadata
 ```
 
 ### Peer Dependencies

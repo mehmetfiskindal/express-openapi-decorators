@@ -56,6 +56,7 @@ describe('discovery: loadControllers', () => {
     try {
       symlinkSync(PACKAGE_ROOT, join(nmRoot, 'openapi-decorators'));
       symlinkSync(PACKAGE_ROOT, join(nmSailor, 'express-openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmSailor, 'openapi-decorators'));
       symlinkSync(PACKAGE_ROOT, join(nmMehmet, 'openapi-decorators'));
     } catch {
       // Symlink may fail in some environments; skip this test.
@@ -65,7 +66,7 @@ describe('discovery: loadControllers', () => {
     writeFileSync(
       join(tempDir, 'user.controller.js'),
       `
-const { Controller, Get, ApiResponse } = require('@mehmetfiskindal/openapi-decorators');
+const { Controller, Get, ApiResponse } = require('@developersailor/openapi-decorators');
 
 class UserController {}
 Controller('/users')(UserController);
@@ -100,6 +101,7 @@ module.exports = { UserController };
     try {
       symlinkSync(PACKAGE_ROOT, join(nmRoot, 'openapi-decorators'));
       symlinkSync(PACKAGE_ROOT, join(nmSailor, 'express-openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmSailor, 'openapi-decorators'));
       symlinkSync(PACKAGE_ROOT, join(nmMehmet, 'openapi-decorators'));
     } catch {
       return;
@@ -108,7 +110,7 @@ module.exports = { UserController };
     writeFileSync(
       join(tempDir, 'ctrl.js'),
       `
-const { Controller, Get } = require('@mehmetfiskindal/openapi-decorators');
+const { Controller, Get } = require('@developersailor/openapi-decorators');
 class Ctrl {}
 Controller('/c')(Ctrl);
 Get('/')(Ctrl.prototype, 'list', {});
