@@ -347,4 +347,18 @@ export interface MetadataStorage {
   fileParams: ApiFileMetadata[];
   consumes: ApiConsumesMetadata[];
   middlewares: MiddlewareMetadata[];
+  routeParams: RouteParamMetadata[];
+}
+
+/**
+ * Parameter decorator types for route handler parameter injection
+ */
+export type RouteParamType = 'param' | 'query' | 'body' | 'header' | 'req' | 'res' | 'context';
+
+export interface RouteParamMetadata {
+  target: Function;
+  methodName: string;
+  index: number;
+  type: RouteParamType;
+  paramName?: string | undefined;
 }

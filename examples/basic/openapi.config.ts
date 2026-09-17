@@ -1,4 +1,4 @@
-import { loadControllers } from '@developersailor/express-openapi-decorators';
+import { loadControllers } from 'openapi-decorators';
 import { UserController } from './src/user.controller.js';
 
 export default {

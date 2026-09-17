@@ -1,6 +1,6 @@
 import express from 'express';
 import 'reflect-metadata';
-import { createRouterFromControllers, setupSwaggerUI, createOpenApiDocument } from '@developersailor/express-openapi-decorators';
+import { createRouterFromControllers, setupSwaggerUI, createOpenApiDocument } from 'openapi-decorators';
 import { UserController } from './user.controller.js';
 
 const app = express();

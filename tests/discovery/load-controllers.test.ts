@@ -48,10 +48,15 @@ describe('discovery: loadControllers', () => {
     // Create a symlink to the package so the temp file can require it
     // by name. This mirrors what a real user's project would look
     // like.
-    const nmDir = join(tempDir, 'node_modules', '@developersailor');
-    mkdirSync(nmDir, { recursive: true });
+    const nmRoot = join(tempDir, 'node_modules');
+    const nmSailor = join(nmRoot, '@developersailor');
+    const nmMehmet = join(nmRoot, '@mehmetfiskindal');
+    mkdirSync(nmSailor, { recursive: true });
+    mkdirSync(nmMehmet, { recursive: true });
     try {
-      symlinkSync(PACKAGE_ROOT, join(nmDir, 'express-openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmRoot, 'openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmSailor, 'express-openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmMehmet, 'openapi-decorators'));
     } catch {
       // Symlink may fail in some environments; skip this test.
       return;
@@ -60,7 +65,7 @@ describe('discovery: loadControllers', () => {
     writeFileSync(
       join(tempDir, 'user.controller.js'),
       `
-const { Controller, Get, ApiResponse } = require('@developersailor/express-openapi-decorators');
+const { Controller, Get, ApiResponse } = require('@mehmetfiskindal/openapi-decorators');
 
 class UserController {}
 Controller('/users')(UserController);
@@ -87,10 +92,15 @@ module.exports = { UserController };
     // module instances in Node, so dedup only applies to literal
     // duplicates. We test the dedup behaviour by importing the same
     // file twice via the same path.
-    const nmDir = join(tempDir, 'node_modules', '@developersailor');
-    mkdirSync(nmDir, { recursive: true });
+    const nmRoot = join(tempDir, 'node_modules');
+    const nmSailor = join(nmRoot, '@developersailor');
+    const nmMehmet = join(nmRoot, '@mehmetfiskindal');
+    mkdirSync(nmSailor, { recursive: true });
+    mkdirSync(nmMehmet, { recursive: true });
     try {
-      symlinkSync(PACKAGE_ROOT, join(nmDir, 'express-openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmRoot, 'openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmSailor, 'express-openapi-decorators'));
+      symlinkSync(PACKAGE_ROOT, join(nmMehmet, 'openapi-decorators'));
     } catch {
       return;
     }
@@ -98,7 +108,7 @@ module.exports = { UserController };
     writeFileSync(
       join(tempDir, 'ctrl.js'),
       `
-const { Controller, Get } = require('@developersailor/express-openapi-decorators');
+const { Controller, Get } = require('@mehmetfiskindal/openapi-decorators');
 class Ctrl {}
 Controller('/c')(Ctrl);
 Get('/')(Ctrl.prototype, 'list', {});

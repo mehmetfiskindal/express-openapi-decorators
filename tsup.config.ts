@@ -16,6 +16,7 @@ export default defineConfig([
     outDir: 'dist',
     external: [
       'express',
+      'hono',
       'swagger-ui-express',
       'reflect-metadata'
     ]
@@ -36,11 +37,9 @@ export default defineConfig([
     outDir: 'dist/cli',
     external: [
       'express',
+      'hono',
       'swagger-ui-express',
       'reflect-metadata',
-      'cac',
-      'fast-glob',
-      'yaml',
       'tsx',
       'tsx/esm/api'
     ]

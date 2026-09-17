@@ -5,7 +5,7 @@
  *
  * Designed to be called from a user `openapi.config.ts`:
  *
- *   import { loadControllers } from '@developersailor/express-openapi-decorators';
+ *   import { loadControllers } from 'openapi-decorators';
  *   export default {
  *     title: 'My API',
  *     version: '1.0.0',
@@ -15,7 +15,7 @@
  * (The literal pattern uses a single-star single-star single-star
  *  glob so the JSDoc parser doesn't terminate on the `*`.)
  */
-import fg from 'fast-glob';
+import { findMatchingFiles } from './glob-utils.js';
 import { pathToFileURL } from 'node:url';
 import { resolve as resolvePath, isAbsolute } from 'node:path';
 import { metadataStorage } from '../metadata/metadata-storage.js';
@@ -118,11 +118,9 @@ export async function loadControllers(
   const patterns = Array.isArray(pattern) ? pattern : [pattern];
 
   // Resolve all patterns into absolute file paths
-  const files = await fg(patterns, {
+  const files = await findMatchingFiles(patterns, {
     cwd,
     ignore,
-    absolute: true,
-    onlyFiles: true,
   });
 
   if (files.length === 0) {

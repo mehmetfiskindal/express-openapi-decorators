@@ -16,7 +16,7 @@ DTO classes, using OpenAPI's `oneOf` + `discriminator` composition.
 # from the package root, after `npm install && npm run build`
 cd examples/polymorphism
 npm install
-npm link @developersailor/express-openapi-decorators
+npm link openapi-decorators
 npm start
 ```
 

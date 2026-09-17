@@ -6,7 +6,7 @@ import {
   ApiFile,
   Controller,
   Post,
-} from '@developersailor/express-openapi-decorators';
+} from 'openapi-decorators';
 import multer from 'multer';
 import type { Request, Response } from 'express';
 

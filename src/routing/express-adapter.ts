@@ -55,7 +55,7 @@ export interface ExpressAdapterOptions {
  * @example
  * ```typescript
  * import express from 'express';
- * import { ExpressAdapter } from 'express-openapi-decorators';
+ * import { ExpressAdapter } from 'openapi-decorators';
  * import { UserController } from './controllers/user.controller';
  * 
  * const app = express();
@@ -232,9 +232,15 @@ export class ExpressAdapter {
       ...resolvedMethodMiddlewares,
     ];
 
+    // Get parameter injection metadata
+    const routeParams = metadataStorage.getRouteParamsForMethod(
+      method.controllerTarget,
+      method.methodName
+    );
+
     // Get the handler function from the controller instance
     const rawHandler = instance[method.methodName].bind(instance);
-    const handler = this.wrapHandler(rawHandler);
+    const handler = this.wrapHandler(rawHandler, routeParams);
 
     // Register the route
     const httpMethod = method.httpMethod as HttpMethod;
@@ -277,24 +283,63 @@ export class ExpressAdapter {
   }
 
   /**
-   * Wrap a route handler to forward async errors to Express' error pipeline.
-   * Express 4 discards rejected promises returned from handlers, so without
-   * this wrapper an async handler throwing would surface as an unhandled
-   * promise rejection instead of reaching the user-defined error middleware.
-   * Express 5 already handles this natively, but the wrapper is a no-op there.
+   * Wrap a route handler to forward async errors to Express' error pipeline,
+   * inject decorated parameters (@Param, @Body, etc.) and auto-send returned values.
    */
-  private wrapHandler(handler: RequestHandler): RequestHandler {
+  private wrapHandler(
+    handler: Function,
+    routeParams: import('../metadata/metadata-types.js').RouteParamMetadata[] = []
+  ): RequestHandler {
     return (req: Request, res: Response, next: NextFunction) => {
       try {
-        // RequestHandler's return type is `void`, but in practice async
-        // handlers can return a Promise. We widen to `unknown` so the
-        // thenable check below compiles cleanly.
-        const result: unknown = handler(req, res, next);
+        let args: unknown[];
+        if (routeParams.length > 0) {
+          const maxIdx = Math.max(...routeParams.map((p) => p.index));
+          args = new Array(maxIdx + 1).fill(undefined);
+
+          for (const param of routeParams) {
+            switch (param.type) {
+              case 'param':
+                args[param.index] = param.paramName ? req.params[param.paramName] : req.params;
+                break;
+              case 'query':
+                args[param.index] = param.paramName ? req.query[param.paramName] : req.query;
+                break;
+              case 'body':
+                args[param.index] = req.body;
+                break;
+              case 'header':
+                args[param.index] = param.paramName ? req.header(param.paramName) : req.headers;
+                break;
+              case 'req':
+                args[param.index] = req;
+                break;
+              case 'res':
+                args[param.index] = res;
+                break;
+              case 'context':
+                args[param.index] = { req, res, next };
+                break;
+            }
+          }
+        } else {
+          args = [req, res, next];
+        }
+
+        const result: unknown = handler(...args);
         if (
           result &&
           typeof (result as { then?: unknown }).then === 'function'
         ) {
-          (result as Promise<unknown>).catch(next);
+          (result as Promise<unknown>)
+            .then((val) => {
+              if (val !== undefined && !res.headersSent) {
+                res.json(val);
+              }
+            })
+            .catch(next);
+        } else if (result !== undefined && !res.headersSent) {
+          res.json(result);
         }
       } catch (error) {
         next(error);
@@ -371,7 +416,7 @@ export interface CreateRouterOptions {
  * @example
  * ```typescript
  * import express from 'express';
- * import { createRouterFromControllers } from '@developersailor/express-openapi-decorators';
+ * import { createRouterFromControllers } from 'openapi-decorators';
  * import { authMiddleware, requireRoles } from '@developersailor/express-auth';
  * 
  * const app = express();

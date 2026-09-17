@@ -7,7 +7,7 @@ import {
   Get,
   Post,
   ApiBody,
-} from '@developersailor/express-openapi-decorators';
+} from 'openapi-decorators';
 import type { Request, Response } from 'express';
 import { Cat, Dog } from './animals.js';
 

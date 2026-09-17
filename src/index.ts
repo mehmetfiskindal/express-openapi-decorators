@@ -28,6 +28,8 @@ export type {
   MiddlewareMetadata,
   MiddlewareFunction,
   MiddlewareReference,
+  RouteParamType,
+  RouteParamMetadata,
   OAuthFlowObject,
   OAuthFlowsObject,
 } from './metadata/metadata-types.js';
@@ -49,6 +51,19 @@ export { ApiQuery } from './decorators/api-query.decorator.js';
 export type { ApiQueryOptions } from './decorators/api-query.decorator.js';
 export { ApiParam } from './decorators/api-param.decorator.js';
 export type { ApiParamOptions } from './decorators/api-param.decorator.js';
+
+// Parameter Decorators (Express & Hono universal)
+export {
+  Param,
+  Query,
+  Body,
+  Headers,
+  Req,
+  Res,
+  Context,
+  Ctx,
+} from './decorators/params.decorator.js';
+
 export {
   ApiProperty,
   ApiPropertyOptional,
@@ -139,7 +154,7 @@ export type {
   OpenApiServer,
 } from './generator/create-openapi-document.js';
 
-// Routing
+// Routing - Express
 export {
   ExpressAdapter,
   createExpressAdapter,
@@ -150,6 +165,29 @@ export type {
   ControllerFactory,
   CreateRouterOptions,
 } from './routing/express-adapter.js';
+
+// Routing - Hono
+export {
+  HonoAdapter,
+  createHonoAdapter,
+  createHonoAppFromControllers,
+} from './routing/hono-adapter.js';
+export type {
+  HonoAdapterOptions,
+  HonoControllerFactory,
+  HonoMiddleware,
+  HonoAppLike,
+  CreateHonoAppOptions,
+} from './routing/hono-adapter.js';
+
+// Swagger UI - Hono helper
+export {
+  setupHonoSwaggerUI,
+  generateSwaggerUiHtml,
+} from './swagger-ui-hono.js';
+export type {
+  SetupHonoSwaggerUIOptions,
+} from './swagger-ui-hono.js';
 
 // Types
 export type {

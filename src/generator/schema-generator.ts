@@ -176,7 +176,13 @@ function isPrimitiveType(type: Function): boolean {
  * override; otherwise returns the class's runtime name.
  */
 export function resolveSchemaName(dtoClass: Function): string {
-  return metadataStorage.getSchemaNameFor(dtoClass) ?? dtoClass.name;
+  const override = metadataStorage.getSchemaNameFor(dtoClass);
+  if (override) return override;
+  const name = dtoClass.name || '';
+  if (name.startsWith('_') && name.length > 1) {
+    return name.replace(/^_+/, '');
+  }
+  return name;
 }
 
 /**

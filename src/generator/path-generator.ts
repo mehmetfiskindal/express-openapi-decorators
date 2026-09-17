@@ -62,7 +62,7 @@ function getPrimitiveTypeName(type: Function): 'string' | 'number' | 'boolean' {
   if (typeof console !== 'undefined' && type && type !== Object) {
     // eslint-disable-next-line no-console
     console.warn(
-      `[express-openapi-decorators] Parameter type "${type.name ?? 'anonymous'}" ` +
+      `[openapi-decorators] Parameter type "${type.name ?? 'anonymous'}" ` +
         `is not a primitive (String/Number/Boolean). Coercing to "string" ` +
         `for OpenAPI compatibility.`
     );

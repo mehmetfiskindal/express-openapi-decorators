@@ -1,6 +1,6 @@
 # Basic Example
 
-A minimal CRUD example showing how to use `express-openapi-decorators` to
+A minimal CRUD example showing how to use `openapi-decorators` to
 document a simple `User` resource.
 
 ## What it demonstrates
@@ -29,7 +29,7 @@ npm run build
 # 2. From the example directory
 cd examples/basic
 npm install
-npm link @developersailor/express-openapi-decorators
+npm link openapi-decorators
 
 # 3. Start the server
 npm start

@@ -95,7 +95,7 @@ export interface CreateOpenApiDocumentOptions {
  *
  * @example
  * ```typescript
- * import { createOpenApiDocument } from 'express-openapi-decorators';
+ * import { createOpenApiDocument } from 'openapi-decorators';
  * import { UserController } from './controllers/user.controller';
  *
  * const document = createOpenApiDocument({

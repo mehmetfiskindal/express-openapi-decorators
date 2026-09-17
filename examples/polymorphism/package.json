@@ -1,14 +1,14 @@
 {
-  "name": "@examples/express-openapi-decorators-polymorphism",
+  "name": "@examples/openapi-decorators-polymorphism",
   "version": "1.0.0",
   "description": "Polymorphism / discriminator example",
   "private": true,
   "scripts": {
     "start": "tsx src/server.ts",
-    "openapi": "express-openapi-decorators generate openapi.config.ts openapi.json"
+    "openapi": "openapi-decorators generate openapi.config.ts openapi.json"
   },
   "dependencies": {
-    "@developersailor/express-openapi-decorators": "*",
+    "openapi-decorators": "*",
     "express": "^4.18.0",
     "reflect-metadata": "^0.2.2"
   },

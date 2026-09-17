@@ -24,6 +24,7 @@
  */
 import type { RequestHandler, Express, Router } from 'express';
 import type { OpenAPIV3, OpenAPIV3_1 } from './types/openapi.types.js';
+import { setupHonoSwaggerUI } from './swagger-ui-hono.js';
 
 type OpenApiDocumentLike = OpenAPIV3.Document | OpenAPIV3_1.Document;
 type DocumentSource =
@@ -105,7 +106,7 @@ async function loadSwaggerUi(): Promise<SwaggerUiMiddleware> {
     throw new Error('swagger-ui-express did not expose the expected `setup` / `serve` functions.');
   } catch (err) {
     throw new Error(
-      '[express-openapi-decorators] Failed to load swagger-ui-express. ' +
+      '[openapi-decorators] Failed to load swagger-ui-express. ' +
         'Install it with `npm install swagger-ui-express`.\n' +
         `Underlying error: ${err instanceof Error ? err.message : String(err)}`
     );
@@ -116,7 +117,12 @@ async function loadSwaggerUi(): Promise<SwaggerUiMiddleware> {
  * Mount Swagger UI on the host. The document is generated lazily and
  * cached after the first call.
  */
-export function setupSwaggerUI(host: Host, options: SetupSwaggerUIOptions): void {
+export function setupSwaggerUI(host: Host | any, options: SetupSwaggerUIOptions): void {
+  // If passed a Hono application
+  if (host && ('fetch' in host || (!('use' in host) && 'get' in host))) {
+    return setupHonoSwaggerUI(host, options);
+  }
+
   const mountPath = options.path ?? '/docs';
   const rawJsonPath = options.rawJsonPath ?? `${mountPath}.json`;
   // `customSiteTitle` and `swaggerOptions` are accepted for API parity

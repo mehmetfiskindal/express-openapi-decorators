@@ -1,13 +1,18 @@
 {
-  "name": "@developersailor/express-openapi-decorators",
-  "version": "2.4.0",
-  "description": "NestJS-like Swagger decorators for Express.js and TypeScript",
+  "name": "@mehmetfiskindal/openapi-decorators",
+  "version": "2.5.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Zero-dependency NestJS-like Swagger OpenAPI decorators for Express.js, Hono, and TypeScript",
   "keywords": [
     "express",
+    "hono",
     "openapi",
     "swagger",
     "decorators",
     "typescript",
+    "zero-dependency",
     "api-docs"
   ],
   "author": "Mehmet Fiskindal <mehmetfiskindal@gmail.com>",
@@ -24,10 +29,21 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "bin": {
+    "openapi-decorators": "./bin/cli.js",
     "express-openapi-decorators": "./bin/cli.js"
   },
   "exports": {
     ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./hono": {
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.mjs"
@@ -55,33 +71,31 @@
     "lint": "tsc --noEmit",
     "prepare": "npm run build"
   },
-  "dependencies": {
-    "cac": "^7.0.0",
-    "fast-glob": "^3.3.3",
-    "reflect-metadata": "^0.2.2",
-    "yaml": "^2.9.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^20.11.0",
     "@types/supertest": "^7.2.0",
     "@types/swagger-ui-express": "^4.1.6",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.11",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "express": "^4.18.2",
-    "portfinder": "^1.0.38",
+    "hono": "^4.13.8",
     "supertest": "^7.2.2",
     "swagger-ui-express": "^5.0.0",
+    "reflect-metadata": "^0.2.2",
     "tsup": "^8.0.1",
     "tsx": "^4.21.0",
     "typescript": "^5.3.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
     "express": "^4.18.0 || ^5.0.0",
+    "hono": "^3.0.0 || ^4.0.0",
+    "reflect-metadata": "^0.1.13 || ^0.2.0",
     "tsx": "^4.0.0"
   },
   "peerDependenciesMeta": {
@@ -89,6 +103,15 @@
       "optional": true
     },
     "class-transformer": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "reflect-metadata": {
       "optional": true
     },
     "tsx": {

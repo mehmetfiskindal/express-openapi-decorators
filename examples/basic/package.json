@@ -1,14 +1,14 @@
 {
-  "name": "@examples/express-openapi-decorators-basic",
+  "name": "@examples/openapi-decorators-basic",
   "version": "1.0.0",
-  "description": "Basic CRUD example for express-openapi-decorators",
+  "description": "Basic CRUD example for openapi-decorators",
   "private": true,
   "scripts": {
     "start": "tsx src/server.ts",
-    "openapi": "express-openapi-decorators generate openapi.config.ts openapi.json"
+    "openapi": "openapi-decorators generate openapi.config.ts openapi.json"
   },
   "dependencies": {
-    "@developersailor/express-openapi-decorators": "*",
+    "openapi-decorators": "*",
     "express": "^4.18.0",
     "reflect-metadata": "^0.2.2"
   },

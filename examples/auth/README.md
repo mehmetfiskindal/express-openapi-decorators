@@ -15,7 +15,7 @@ Demonstrates how to document a Bearer-token-protected endpoint.
 # from the package root, after running `npm install && npm run build`
 cd examples/auth
 npm install
-npm link @developersailor/express-openapi-decorators
+npm link openapi-decorators
 npm start
 ```
 

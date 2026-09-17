@@ -4,7 +4,7 @@ import {
   createRouterFromControllers,
   setupSwaggerUI,
   createOpenApiDocument,
-} from '@developersailor/express-openapi-decorators';
+} from 'openapi-decorators';
 import { UploadController } from './upload.controller.js';
 
 const app = express();

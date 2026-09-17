@@ -7,7 +7,7 @@ import {
   Get,
   Post,
   Param,
-} from '@developersailor/express-openapi-decorators';
+} from 'openapi-decorators';
 import type { Request, Response } from 'express';
 import { UserDto, CreateUserDto } from './dto.js';
 

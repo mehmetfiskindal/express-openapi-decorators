@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import type {
   ControllerMetadata,
   MethodMetadata,
@@ -23,6 +22,7 @@ import type {
   ApiLinkMetadata,
   MiddlewareMetadata,
   MiddlewareReference,
+  RouteParamMetadata,
 } from './metadata-types.js';
 
 /**
@@ -53,6 +53,23 @@ class MetadataStorageImpl {
   readonly responseHeaders: ApiResponseHeaderMetadata[] = [];
   readonly links: ApiLinkMetadata[] = [];
   readonly middlewares: MiddlewareMetadata[] = [];
+  readonly routeParams: RouteParamMetadata[] = [];
+
+  /**
+   * Add route parameter injection metadata
+   */
+  addRouteParam(metadata: RouteParamMetadata): void {
+    this.routeParams.push(metadata);
+  }
+
+  /**
+   * Get route parameters for a specific method, sorted by parameter index
+   */
+  getRouteParamsForMethod(target: Function, methodName: string): RouteParamMetadata[] {
+    return this.routeParams
+      .filter((p) => p.target === target && p.methodName === methodName)
+      .sort((a, b) => a.index - b.index);
+  }
 
   /**
    * Add controller metadata
@@ -557,6 +574,7 @@ class MetadataStorageImpl {
     this.responseHeaders.length = 0;
     this.links.length = 0;
     this.middlewares.length = 0;
+    this.routeParams.length = 0;
     // Reset schema cache so re-running with the same DTO class reflects
     // any updates to the decorator metadata.
     try {

@@ -9,7 +9,7 @@
 //   2. For TypeScript configs, the user must run the CLI under a
 //      TypeScript-aware loader. We document three options in the
 //      README:
-//        a) `npx tsx node_modules/@developersailor/express-openapi-decorators/bin/cli.js ...`
+//        a) `npx tsx node_modules/openapi-decorators/bin/cli.js ...`
 //        b) Add `"scripts": { "openapi": "tsx bin/cli.js generate ..." }` to package.json
 //        c) Use a plain JS config (the README shows an example)
 //
@@ -30,7 +30,7 @@ import('file://' + cliEntry)
     const run = cliMod && cliMod.run;
     if (typeof run !== 'function') {
       console.error(
-        'express-openapi-decorators: CLI bundle does not export a `run()` function.'
+        'openapi-decorators: CLI bundle does not export a `run()` function.'
       );
       process.exit(1);
     }
@@ -41,7 +41,7 @@ import('file://' + cliEntry)
   })
   .catch((err) => {
     console.error(
-      'express-openapi-decorators: failed to run.\n' +
+      'openapi-decorators: failed to run.\n' +
         'If your config is TypeScript, run via `npx tsx` or compile it first.\n' +
         'Underlying error: ' +
         (err && err.message ? err.message : String(err))

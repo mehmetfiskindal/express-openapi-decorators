@@ -15,7 +15,7 @@ Demonstrates how to document a multipart file upload endpoint.
 # from the package root, after running `npm install && npm run build`
 cd examples/upload
 npm install
-npm link @developersailor/express-openapi-decorators
+npm link openapi-decorators
 npm start
 ```
 

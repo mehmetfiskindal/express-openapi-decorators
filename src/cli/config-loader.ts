@@ -76,7 +76,7 @@ async function dynamicImport(configPath: string): Promise<unknown> {
     } catch (tsxErr) {
       throw new Error(
         'Failed to load TypeScript config. Install `tsx` and run the CLI via ' +
-          '`npx express-openapi-decorators` or `node --import tsx/esm <bundle>`.\n' +
+          '`npx openapi-decorators` or `node --import tsx/esm <bundle>`.\n' +
           'Original error: ' +
           message +
           '\ntsx error: ' +

@@ -29,7 +29,11 @@ interface ValidationMetadata {
  */
 function getValidationMetadata(target: Function, propertyKey: string): ValidationMetadata[] {
   // Try to get metadata from reflect-metadata
-  const metadata = Reflect.getMetadata(VALIDATION_METADATA_KEY, target.prototype, propertyKey);
+  const reflect = typeof Reflect !== 'undefined' ? (Reflect as any) : undefined;
+  const metadata =
+    typeof reflect?.getMetadata === 'function'
+      ? reflect.getMetadata(VALIDATION_METADATA_KEY, target.prototype, propertyKey)
+      : undefined;
   
   if (Array.isArray(metadata)) {
     return metadata;

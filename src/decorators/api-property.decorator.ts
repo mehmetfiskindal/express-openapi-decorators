@@ -166,11 +166,11 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
     const targetClass = target.constructor as Function;
 
     // Try to get design:type from reflect-metadata
-    const designType: Function | undefined = Reflect.getMetadata(
-      MetadataKeys.DESIGN_TYPE,
-      target,
-      propertyKey
-    );
+    const reflect = typeof Reflect !== 'undefined' ? (Reflect as any) : undefined;
+    const designType: Function | undefined =
+      typeof reflect?.getMetadata === 'function'
+        ? reflect.getMetadata(MetadataKeys.DESIGN_TYPE, target, propertyKey)
+        : undefined;
 
     // Determine the final type
     let type: Function | [Function] | undefined = options.type;
@@ -185,11 +185,10 @@ export function ApiProperty(options: ApiPropertyOptions = {}): PropertyDecorator
           // `items` reference. If the element type cannot be determined we
           // fall back to `Object` to keep the schema valid.
           isArray = true;
-          const paramTypes = Reflect.getMetadata(
-            MetadataKeys.DESIGN_PARAM_TYPES,
-            target,
-            propertyKey
-          ) as unknown[] | undefined;
+          const paramTypes =
+            typeof reflect?.getMetadata === 'function'
+              ? (reflect.getMetadata(MetadataKeys.DESIGN_PARAM_TYPES, target, propertyKey) as unknown[] | undefined)
+              : undefined;
           const inner = Array.isArray(paramTypes) ? paramTypes[0] : undefined;
           if (inner && typeof inner === 'function') {
             type = inner as Function;

@@ -18,7 +18,7 @@ A kitchen-sink example combining many of the decorators in one place.
 # from the package root, after `npm install && npm run build`
 cd examples/advanced
 npm install
-npm link @developersailor/express-openapi-decorators
+npm link openapi-decorators
 npm start
 ```
 

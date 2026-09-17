@@ -6,7 +6,7 @@ import {
   Controller,
   Get,
   Use,
-} from '@developersailor/express-openapi-decorators';
+} from 'openapi-decorators';
 import type { Request, Response } from 'express';
 import { bearerAuth } from './auth.middleware.js';
 

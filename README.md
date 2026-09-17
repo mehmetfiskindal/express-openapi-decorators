@@ -1,34 +1,35 @@
-# Express OpenAPI Decorators
+# openapi-decorators
 
-[![npm version](https://img.shields.io/npm/v/@developersailor/express-openapi-decorators.svg)](https://www.npmjs.com/package/@developersailor/express-openapi-decorators)
-[![npm downloads](https://img.shields.io/npm/dm/@developersailor/express-openapi-decorators.svg)](https://www.npmjs.com/package/@developersailor/express-openapi-decorators)
+[![npm version](https://img.shields.io/npm/v/@mehmetfiskindal/openapi-decorators.svg)](https://www.npmjs.com/package/@mehmetfiskindal/openapi-decorators)
+[![npm downloads](https://img.shields.io/npm/dm/@mehmetfiskindal/openapi-decorators.svg)](https://www.npmjs.com/package/@mehmetfiskindal/openapi-decorators)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/node/v/@developersailor/express-openapi-decorators)](https://nodejs.org/)
+[![Node.js Version](https://img.shields.io/node/v/@mehmetfiskindal/openapi-decorators)](https://nodejs.org/)
 
-> NestJS-like Swagger decorators for Express.js and TypeScript.
+> Zero-dependency NestJS-like Swagger OpenAPI decorators for Express.js, Hono, and TypeScript.
 
-Generate OpenAPI 3.0 documentation from TypeScript decorators without writing YAML, JSON, or JSDoc comments.
+Generate OpenAPI 3.0 / 3.1 documentation from TypeScript decorators without writing YAML, JSON, or JSDoc comments.
 
 ## Features
 
-- 🎯 **No YAML** - No more writing OpenAPI YAML files
-- 📝 **No JSDoc** - No more @swagger JSDoc comments
-- 🚀 **NestJS-like DX** - Similar developer experience to NestJS
-- 📦 **DTO-based Schemas** - Automatic schema generation from decorated DTO classes
-- ⚡ **Express-friendly** - Designed for Express.js applications
-- 🔷 **TypeScript-first** - Full TypeScript support
+- 🪶 **Zero Runtime Dependencies** - 0 external runtime dependencies. Completely clean `npm audit`.
+- ⚡ **Express & Hono Dual Engine** - Write your decorated controllers once and run them on Express.js or Hono.
+- 🎯 **Parameter Injection** - First-class support for `@Param()`, `@Query()`, `@Body()`, `@Headers()`, `@Context()`.
+- 📦 **DTO-based Schemas** - Automatic schema generation from decorated DTO classes.
+- 🚀 **NestJS-like DX** - Similar developer experience to NestJS with zero runtime lock-in.
+- 📄 **Interactive Swagger UI** - Ready-to-go Swagger UI helpers for both Express and Hono.
+- 🔷 **TypeScript-first** - Full TypeScript support with clean type definitions.
 
 ## Installation
 
 ```bash
 # npm
-npm install @developersailor/express-openapi-decorators reflect-metadata
+npm install @mehmetfiskindal/openapi-decorators reflect-metadata
 
 # yarn
-yarn add @developersailor/express-openapi-decorators reflect-metadata
+yarn add @mehmetfiskindal/openapi-decorators reflect-metadata
 
 # pnpm
-pnpm add @developersailor/express-openapi-decorators reflect-metadata
+pnpm add @mehmetfiskindal/openapi-decorators reflect-metadata
 ```
 
 ### Peer Dependencies
@@ -72,7 +73,7 @@ import 'reflect-metadata';
 ### 3. Create DTOs with @ApiProperty
 
 ```typescript
-import { ApiProperty, ApiPropertyOptional } from '@developersailor/express-openapi-decorators';
+import { ApiProperty, ApiPropertyOptional } from 'openapi-decorators';
 
 export class UserDto {
   @ApiProperty({
@@ -152,7 +153,7 @@ import {
   ApiBody,
   ApiQuery,
   ApiParam,
-} from '@developersailor/express-openapi-decorators';
+} from 'openapi-decorators';
 import { Request, Response } from 'express';
 import { UserDto, CreateUserDto } from './dto/user.dto';
 
@@ -280,7 +281,7 @@ export class UserController {
 import 'reflect-metadata';
 import express from 'express';
 import swaggerUi from 'swagger-ui-express';
-import { createOpenApiDocument } from '@developersailor/express-openapi-decorators';
+import { createOpenApiDocument } from 'openapi-decorators';
 import { UserController } from './controllers/user.controller';
 
 const app = express();
@@ -312,6 +313,41 @@ app.listen(3000, () => {
   console.log('Server running on http://localhost:3000');
   console.log('Swagger UI available at http://localhost:3000/docs');
 });
+```
+
+### 5b. (Alternative) Setup with Hono
+
+The exact same decorated controllers work seamlessly on Hono with `HonoAdapter` and zero-dependency Swagger UI:
+
+```typescript
+import { Hono } from 'hono';
+import {
+  HonoAdapter,
+  setupHonoSwaggerUI,
+  createOpenApiDocument,
+} from 'openapi-decorators';
+import { UserController } from './controllers/user.controller';
+
+const app = new Hono();
+
+// 1. Automatically mount controller routes
+const adapter = new HonoAdapter(app, { globalPrefix: '/api' });
+adapter.registerControllers([UserController]);
+
+// 2. Generate OpenAPI document
+const document = createOpenApiDocument({
+  title: 'My Hono API',
+  version: '1.0.0',
+  controllers: [UserController],
+});
+
+// 3. Mount zero-dependency Swagger UI (UI at /docs, raw JSON at /docs.json)
+setupHonoSwaggerUI(app, {
+  path: '/docs',
+  document,
+});
+
+export default app;
 ```
 
 ## Available Decorators
@@ -458,7 +494,7 @@ pipelines, CI checks, and committing spec snapshots.
 ### `generate`
 
 ```bash
-express-openapi-decorators generate <config-file> [output-file] [options]
+openapi-decorators generate <config-file> [output-file] [options]
 ```
 
 | Flag | Default | Description |
@@ -486,9 +522,11 @@ export default {
 Run it:
 
 ```bash
-express-openapi-decorators generate openapi.config.ts openapi.json
-express-openapi-decorators generate openapi.config.ts openapi.yaml --format yaml
+openapi-decorators generate openapi.config.ts openapi.json
+openapi-decorators generate openapi.config.ts openapi.yaml --format yaml
 ```
+
+*(Note: `express-openapi-decorators` is also available as a CLI binary alias for backwards compatibility)*
 
 For TypeScript configs the CLI uses your project's installed `tsx`
 (an optional peer dependency). Install once and the CLI picks it up
@@ -505,7 +543,7 @@ npm install -D tsx
 ### `validate`
 
 ```bash
-express-openapi-decorators validate <config-file>
+openapi-decorators validate <config-file>
 ```
 
 Builds the document in memory and runs a few sanity checks
@@ -515,7 +553,7 @@ with code 0 on success, non-zero on failure. Useful as a CI step:
 ```json
 {
   "scripts": {
-    "openapi:check": "express-openapi-decorators validate openapi.config.ts"
+    "openapi:check": "openapi-decorators validate openapi.config.ts"
   }
 }
 ```
@@ -528,7 +566,7 @@ they export.
 
 ```ts
 // openapi.config.ts
-import { loadControllers } from '@developersailor/express-openapi-decorators';
+import { loadControllers } from 'openapi-decorators';
 
 export default {
   title: 'My API',
@@ -549,14 +587,14 @@ configs no extra dependency is needed.
 ## Swagger UI Setup
 
 `setupSwaggerUI(app, options)` mounts a Swagger UI endpoint and a
-raw-JSON endpoint on an Express app or router.
+raw-JSON endpoint on an Express or Hono app.
 
 ```ts
 import express from 'express';
 import {
   setupSwaggerUI,
   createOpenApiDocument,
-} from '@developersailor/express-openapi-decorators';
+} from 'openapi-decorators';
 import { UserController } from './user.controller.js';
 
 const app = express();
@@ -591,7 +629,7 @@ runtime (e.g. database-driven controllers).
 
 ## Examples
 
-The `examples/` directory contains five runnable apps that demonstrate
+The `examples/` directory contains runnable apps that demonstrate
 specific features in isolation. Each one is a self-contained
 package with its own `package.json`, `openapi.config.ts`, and
 `README.md` walking you through how to run it.
@@ -599,6 +637,7 @@ package with its own `package.json`, `openapi.config.ts`, and
 | Example | What it shows |
 | --- | --- |
 | [`examples/basic`](./examples/basic/) | Minimal CRUD: `@Controller`, `@Get` / `@Post`, `@ApiResponse`, `@ApiBody` |
+| [`examples/hono`](./examples/hono/) | Hono integration: `HonoAdapter`, universal parameter injection, Swagger UI |
 | [`examples/auth`](./examples/auth/) | `@ApiBearerAuth` + `@Use(middleware)` for protected routes, and `@Public()` for anonymous ones |
 | [`examples/upload`](./examples/upload/) | `@ApiConsumes('multipart/form-data')` + `@ApiFile` for a single upload field |
 | [`examples/polymorphism`](./examples/polymorphism/) | `@ApiProperty({ oneOf, discriminator })` for typed unions |
@@ -609,7 +648,7 @@ To run any of them:
 ```bash
 cd examples/basic
 npm install
-npm link @developersailor/express-openapi-decorators
+npm link openapi-decorators
 npm start          # http://localhost:3000
 npm run openapi    # writes ./openapi.json
 ```
@@ -682,10 +721,10 @@ the NestJS framework. The decorator surface is a strict subset of
 `@nestjs/swagger` — most code that decorates a NestJS controller
 will work here with only the import path changed.
 
-| `@nestjs/swagger` | `@developersailor/express-openapi-decorators` |
+| `@nestjs/swagger` | `openapi-decorators` |
 | --- | --- |
-| `import { ApiProperty } from '@nestjs/swagger'` | `import { ApiProperty } from '@developersailor/express-openapi-decorators'` |
-| `import { Controller, Get } from '@nestjs/common'` | `import { Controller, Get } from '@developersailor/express-openapi-decorators'` |
+| `import { ApiProperty } from '@nestjs/swagger'` | `import { ApiProperty } from 'openapi-decorators'` |
+| `import { Controller, Get } from '@nestjs/common'` | `import { Controller, Get } from 'openapi-decorators'` |
 | `import { NestFactory } from '@nestjs/core'` | `import express from 'express'; const app = express();` |
 | `SwaggerModule.createDocument(app, options)` | `createOpenApiDocument(options)` |
 | `SwaggerModule.setup('/docs', app, document)` | `setupSwaggerUI(app, { path: '/docs', document })` |
@@ -695,7 +734,7 @@ will work here with only the import path changed.
 
 - **Dependency injection.** There is no `Module` / `Provider` system.
   Controllers are plain classes; you wire them up yourself with
-  `createRouterFromControllers([UserController])`.
+  `createRouterFromControllers([UserController])` or `createHonoAppFromControllers([UserController])`.
 - **Built-in validation pipe.** This package only generates docs.
   Pair with `class-validator` + a manual middleware, or use a
   framework like `zod`.
@@ -731,7 +770,7 @@ The equivalent in this package:
 
 ```ts
 // After
-import { Controller, Get, Param, ApiTags, ApiResponse } from '@developersailor/express-openapi-decorators';
+import { Controller, Get, Param, ApiTags, ApiResponse } from 'openapi-decorators';
 import { UserService } from './user.service';
 
 @ApiTags('users')

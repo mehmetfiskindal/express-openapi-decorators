@@ -1,4 +1,4 @@
-import { ApiProperty } from '@developersailor/express-openapi-decorators';
+import { ApiProperty } from 'openapi-decorators';
 
 export class OrderDto {
   @ApiProperty({ type: String, example: 'ord_1' })
